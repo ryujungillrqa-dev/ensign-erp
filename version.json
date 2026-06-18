@@ -1,0 +1,11 @@
+{
+  "version": "3.0.0",
+  "date": "2026-06-18",
+  "changes": [
+    "Supabase 연동 (클라우드 저장)",
+    "6자리 PIN 로그인",
+    "실시간 동기화",
+    "역할별 메뉴 제어"
+  ],
+  "download": "https://ryujungillrqa-dev.github.io/ensign-erp/ENsign_ERP_Setup.exe"
+}
