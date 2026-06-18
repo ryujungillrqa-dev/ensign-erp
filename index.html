@@ -26,7 +26,7 @@ button{font-family:inherit;cursor:pointer}
 input,select,textarea{font-family:inherit;font-size:13px;color:var(--ink)}
 
 /* ===== 사이드바 ===== */
-#sidebar{width:180px;min-width:180px;background:#15211f;color:#cfd9d6;display:flex;flex-direction:column;height:100vh;position:sticky;top:0}
+#app-screen{display:flex;flex-direction:row;width:100vw;height:100vh}#sidebar{width:180px;min-width:180px;background:#15211f;color:#cfd9d6;display:flex;flex-direction:column;height:100vh;position:sticky;top:0}
 #sidebar .logo{padding:20px 18px 14px;border-bottom:1px solid #243430}
 #sidebar .logo .nm{font-size:17px;font-weight:800;color:#fff;letter-spacing:.5px}
 #sidebar .logo .nm b{color:#5fc7b4}
@@ -40,7 +40,7 @@ input,select,textarea{font-family:inherit;font-size:13px;color:var(--ink)}
 #sidebar .foot{padding:12px 16px;border-top:1px solid #243430;font-size:11px;color:#5e716c}
 
 /* ===== 본문 ===== */
-#app-screen{display:flex;flex-direction:row;width:100%;height:100vh;overflow:hidden}#main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;overflow:hidden}
+#main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;overflow:hidden}
 #topbar{background:var(--panel);border-bottom:1px solid var(--line);padding:0 22px;height:52px;display:flex;align-items:center;gap:14px;flex-shrink:0}
 #topbar h1{font-size:16px;font-weight:800}
 #topbar .crumb{font-size:12px;color:var(--ink3)}
@@ -145,90 +145,33 @@ table.dz td.num-ro{padding:6px 9px;text-align:right;font-variant-numeric:tabular
 </style>
 </head>
 <body>
-<!-- ===== 로그인 화면 ===== -->
 <div id="login-screen" style="position:fixed;inset:0;background:linear-gradient(135deg,#0e5e54 0%,#1a8a7a 100%);z-index:9999;display:flex;align-items:center;justify-content:center">
-
-  <!-- 첫 실행: 이름 + PIN 설정 -->
   <div id="pin-setup" style="display:none;background:#fff;border-radius:16px;padding:36px 40px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
-    <div style="text-align:center;margin-bottom:24px">
-      <div style="font-size:26px;font-weight:900;color:#0e5e54">EN<span style="color:#4caf7d">sign</span> ERP</div>
-      <div style="font-size:13px;color:#7d918c;margin-top:4px">처음 사용 설정</div>
-    </div>
+    <div style="text-align:center;margin-bottom:24px"><div style="font-size:26px;font-weight:900;color:#0e5e54">EN<span style="color:#4caf7d">sign</span> ERP</div><div style="font-size:13px;color:#7d918c;margin-top:4px">처음 사용 설정</div></div>
     <div id="setup-error" style="display:none;background:#fde8e8;color:#c0392b;padding:8px 12px;border-radius:7px;font-size:12px;margin-bottom:14px"></div>
-    <div style="margin-bottom:12px">
-      <label style="font-size:12px;color:#5e716c;font-weight:600;display:block;margin-bottom:5px">이름 (정확히 입력)</label>
-      <input id="setup-name" placeholder="홍길동"
-        style="width:100%;border:1.5px solid #d1dbd9;border-radius:8px;padding:9px 12px;font-size:14px;box-sizing:border-box;outline:none"
-        onfocus="this.style.borderColor='#0e5e54'" onblur="this.style.borderColor='#d1dbd9'">
-    </div>
-    <div style="margin-bottom:8px">
-      <label style="font-size:12px;color:#5e716c;font-weight:600;display:block;margin-bottom:5px">PIN 설정 (6자리)</label>
-      <div style="display:flex;gap:8px;justify-content:center;margin-bottom:8px">
-        <div id="setup-dots" style="display:flex;gap:8px">
-          ${[0,1,2,3,4,5].map(i=>`<div style="width:14px;height:14px;border-radius:50%;border:2px solid #ccc;background:#fff"></div>`).join('')}
-        </div>
-      </div>
-    </div>
-    <div style="margin-bottom:16px">
-      <label style="font-size:12px;color:#5e716c;font-weight:600;display:block;margin-bottom:5px">PIN 확인</label>
-      <div style="display:flex;gap:8px;justify-content:center;margin-bottom:8px">
-        <div id="confirm-dots" style="display:flex;gap:8px">
-        </div>
-      </div>
-    </div>
-    <!-- 숫자 키패드 -->
+    <div style="margin-bottom:12px"><label style="font-size:12px;color:#5e716c;font-weight:600;display:block;margin-bottom:5px">이름 (인사관리에 등록된 이름)</label><input id="setup-name" placeholder="홍길동" style="width:100%;border:1.5px solid #d1dbd9;border-radius:8px;padding:9px 12px;font-size:14px;box-sizing:border-box;outline:none" onfocus="this.style.borderColor='#0e5e54'" onblur="this.style.borderColor='#d1dbd9'"></div>
+    <div style="margin-bottom:6px"><label id="setup-pin-label" style="font-size:12px;color:#5e716c;font-weight:600;display:block;margin-bottom:6px">PIN 설정 (6자리)</label><div id="setup-dots" style="display:flex;gap:10px;justify-content:center;margin-bottom:8px"></div></div>
+    <div id="confirm-wrap" style="display:none;margin-bottom:14px"><div id="confirm-notice" style="background:#fff8e1;color:#f57f17;padding:8px 12px;border-radius:7px;font-size:12px;text-align:center;margin-bottom:8px;font-weight:600">🔒 PIN을 한 번 더 입력해주세요</div><div id="confirm-dots" style="display:flex;gap:10px;justify-content:center;margin-bottom:8px"></div></div>
     <div id="setup-keypad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px"></div>
     <button onclick="PinAuth.cancelSetup()" style="width:100%;background:#f0f5f3;border:1px solid #d1dbd9;border-radius:8px;padding:10px;font-size:13px;color:#5e716c;cursor:pointer">취소</button>
   </div>
-
-  <!-- 일반 로그인: PIN 입력 -->
   <div id="pin-login" style="display:none;background:#fff;border-radius:16px;padding:36px 40px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
-    <div style="text-align:center;margin-bottom:20px">
-      <div style="font-size:26px;font-weight:900;color:#0e5e54">EN<span style="color:#4caf7d">sign</span> ERP</div>
-      <div id="pin-greeting" style="font-size:15px;color:#2e7d52;font-weight:700;margin-top:8px"></div>
-      <div style="font-size:12px;color:#7d918c;margin-top:2px">PIN 6자리를 입력하세요</div>
-    </div>
+    <div style="text-align:center;margin-bottom:20px"><div style="font-size:26px;font-weight:900;color:#0e5e54">EN<span style="color:#4caf7d">sign</span> ERP</div><div id="pin-greeting" style="font-size:15px;color:#2e7d52;font-weight:700;margin-top:8px"></div><div style="font-size:12px;color:#7d918c;margin-top:2px">PIN 6자리를 입력하세요</div></div>
     <div id="pin-error" style="display:none;background:#fde8e8;color:#c0392b;padding:8px 12px;border-radius:7px;font-size:12px;margin-bottom:12px;text-align:center"></div>
-    <!-- PIN 점 표시 -->
-    <div style="display:flex;gap:12px;justify-content:center;margin-bottom:24px">
-      <div id="pin-dots" style="display:flex;gap:12px"></div>
-    </div>
-    <!-- 숫자 키패드 -->
-    <div id="login-keypad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px"></div>
-    <button onclick="PinAuth.switchUser()" style="width:100%;background:#f0f5f3;border:1px solid #d1dbd9;border-radius:8px;padding:10px;font-size:12px;color:#7d918c;cursor:pointer">다른 계정으로 로그인</button>
+    <div style="display:flex;gap:12px;justify-content:center;margin-bottom:24px"><div id="pin-dots" style="display:flex;gap:12px"></div></div>
+    <div id="login-keypad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px"></div>
+    <button onclick="PinAuth.switchUser()" style="width:100%;background:#f0f5f3;border:1px solid #d1dbd9;border-radius:8px;padding:8px;font-size:12px;color:#7d918c;cursor:pointer;margin-bottom:8px">다른 계정으로 로그인</button>
+    <div style="text-align:right;margin-top:4px"><button onclick="PinAuth.showEmailLogin()" style="background:none;border:none;font-size:11px;color:#b0bbb8;cursor:pointer;text-decoration:underline">관리자 로그인</button></div>
   </div>
-
-  <!-- 이메일/비밀번호 백업 로그인 (관리자용) -->
   <div id="email-login" style="display:none;background:#fff;border-radius:16px;padding:36px 40px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
-    <div style="text-align:center;margin-bottom:24px">
-      <div style="font-size:26px;font-weight:900;color:#0e5e54">EN<span style="color:#4caf7d">sign</span> ERP</div>
-      <div style="font-size:12px;color:#7d918c;margin-top:4px">관리자 로그인</div>
-    </div>
+    <div style="text-align:center;margin-bottom:24px"><div style="font-size:26px;font-weight:900;color:#0e5e54">EN<span style="color:#4caf7d">sign</span> ERP</div><div style="font-size:12px;color:#7d918c;margin-top:4px">관리자 로그인</div></div>
     <div id="login-error" style="display:none;background:#fde8e8;color:#c0392b;padding:8px 12px;border-radius:7px;font-size:12px;margin-bottom:14px"></div>
-    <div style="margin-bottom:12px">
-      <label style="font-size:12px;color:#5e716c;font-weight:600;display:block;margin-bottom:5px">이메일</label>
-      <input id="login-email" type="email" placeholder="이메일 주소"
-        style="width:100%;border:1.5px solid #d1dbd9;border-radius:8px;padding:9px 12px;font-size:14px;box-sizing:border-box;outline:none"
-        onfocus="this.style.borderColor='#0e5e54'" onblur="this.style.borderColor='#d1dbd9'"
-        onkeydown="if(event.key==='Enter')document.getElementById('login-pw').focus()">
-    </div>
-    <div style="margin-bottom:16px">
-      <label style="font-size:12px;color:#5e716c;font-weight:600;display:block;margin-bottom:5px">비밀번호</label>
-      <input id="login-pw" type="password" placeholder="비밀번호"
-        style="width:100%;border:1.5px solid #d1dbd9;border-radius:8px;padding:9px 12px;font-size:14px;box-sizing:border-box;outline:none"
-        onfocus="this.style.borderColor='#0e5e54'" onblur="this.style.borderColor='#d1dbd9'"
-        onkeydown="if(event.key==='Enter')SupaAuth.login()">
-    </div>
-    <button id="login-btn" onclick="SupaAuth.login()"
-      style="width:100%;background:#0e5e54;color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">
-      로그인
-    </button>
+    <div style="margin-bottom:12px"><label style="font-size:12px;color:#5e716c;font-weight:600;display:block;margin-bottom:5px">이메일</label><input id="login-email" type="email" placeholder="이메일 주소" style="width:100%;border:1.5px solid #d1dbd9;border-radius:8px;padding:9px 12px;font-size:14px;box-sizing:border-box;outline:none" onfocus="this.style.borderColor='#0e5e54'" onblur="this.style.borderColor='#d1dbd9'" onkeydown="if(event.key==='Enter')document.getElementById('login-pw').focus()"></div>
+    <div style="margin-bottom:16px"><label style="font-size:12px;color:#5e716c;font-weight:600;display:block;margin-bottom:5px">비밀번호</label><input id="login-pw" type="password" placeholder="비밀번호" style="width:100%;border:1.5px solid #d1dbd9;border-radius:8px;padding:9px 12px;font-size:14px;box-sizing:border-box;outline:none" onfocus="this.style.borderColor='#0e5e54'" onblur="this.style.borderColor='#d1dbd9'" onkeydown="if(event.key==='Enter')SupaAuth.login()"></div>
+    <button id="login-btn" onclick="SupaAuth.login()" style="width:100%;background:#0e5e54;color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">로그인</button>
     <button onclick="PinAuth.showPinLogin()" style="width:100%;background:#f0f5f3;border:1px solid #d1dbd9;border-radius:8px;padding:10px;font-size:12px;color:#7d918c;cursor:pointer">PIN 로그인으로 돌아가기</button>
   </div>
-
 </div>
-
-<!-- ===== 메인 앱 ===== -->
 <div id="app-screen" style="display:none">
 
 <aside id="sidebar">
@@ -277,20 +220,20 @@ table.dz td.num-ro{padding:6px 9px;text-align:right;font-variant-numeric:tabular
 <div id="toast"></div>
 
 <script>
-const APP_VERSION  = '3.0.0';
-const UPDATE_URL   = 'https://ryujungillrqa-dev.github.io/ensign-erp/version.json';
-const DOWNLOAD_URL = 'https://ryujungillrqa-dev.github.io/ensign-erp/ENsign_ERP_Setup.exe';
-
-const SUPA_URL = 'https://gfrpeidcpnvlofuutndv.supabase.co';
-const SUPA_KEY = 'sb_publishable_hQHq4n8gJZ8vELHkIq41jA_mAza9Ba3';
+const SUPA_URL    = 'https://gfrpeidcpnvlofuutndv.supabase.co';
+const SUPA_KEY    = 'sb_publishable_hQHq4n8gJZ8vELHkIq41jA_mAza9Ba3';
+const APP_VERSION = '3.0.0';
+const UPDATE_URL  = 'https://ryujungillrqa-dev.github.io/ensign-erp/version.json';
+const DOWNLOAD_URL= 'https://ryujungillrqa-dev.github.io/ensign-erp/ENsign_ERP_Setup.exe';
 const supa = window.supabase.createClient(SUPA_URL, SUPA_KEY);
 let _supaUser = null;
 let _supaProfile = null;
-
 const ROLE_MENUS = {
   '관리자':    ['contracts','ediagmail','ediag','invoices','dash','hr','auth','bank','match','savings','settings'],
+  '부관리자':  ['contracts','ediagmail','ediag','invoices','dash','hr','auth','settings'],
   '계약담당':  ['contracts','ediagmail','ediag','invoices','dash'],
-  '에너지진단':['ediagmail','ediag','contracts'],
+  '에너지진단':['contracts','ediagmail','ediag'],
+  '진단팀장':  ['contracts','ediagmail','ediag','invoices'],
   '자금담당':  ['bank','match','savings','dash'],
   '일반직원':  ['contracts','ediagmail','ediag','invoices'],
 };
@@ -1960,7 +1903,6 @@ Views.settings = function(){
         <button class="btn pri" onclick="Settings.backup()">전체 백업 (JSON 다운로드)</button>
         <label class="btn">백업 복원 (JSON 업로드)<input type="file" accept=".json" style="display:none" onchange="Settings.restore(this)"></label>
         <button class="btn dgr" onclick="Settings.wipe()">전체 데이터 초기화</button>
-      <button class="btn" style="background:#1565c0;color:#fff;border-color:#0d47a1" onclick="migrateToSupabase()">☁ 기존 데이터 → Supabase 이전</button>
       </div>
     </div></div>
 
@@ -2034,6 +1976,360 @@ document.getElementById('today').textContent = new Date().toLocaleDateString('ko
 route();
 </script>
 </div>
+
+<script>
+/* ===== SupaAuth — 로그인/로그아웃 ===== */
+const SupaAuth = {
+  async login(){
+    const email=(document.getElementById('login-email')?.value||'').trim();
+    const pw=document.getElementById('login-pw')?.value||'';
+    const errEl=document.getElementById('login-error');
+    const btn=document.getElementById('login-btn');
+    errEl.style.display='none';
+    if(!email||!pw){errEl.textContent='이메일과 비밀번호를 입력해주세요';errEl.style.display='block';return;}
+    btn.textContent='로그인 중...';btn.disabled=true;
+    try{
+      const {data,error}=await supa.auth.signInWithPassword({email,password:pw});
+      if(error) throw error;
+      await SupaAuth.onLogin(data.user);
+    }catch(e){
+      errEl.textContent=(e.message||'').includes('Invalid')?'이메일 또는 비밀번호가 올바르지 않습니다':e.message;
+      errEl.style.display='block';
+      btn.textContent='로그인';btn.disabled=false;
+    }
+  },
+  async onLogin(user){
+    _supaUser=user;
+    const {data:prof}=await supa.from('staff_profiles').select('*').eq('email',user.email).maybeSingle();
+    _supaProfile=prof||{name:user.email,role:'관리자'};
+    SupaAuth.applyMenus();SupaAuth.renderUser();
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('app-screen').style.display='flex';
+    await supaLoadAll();startRealtime();route();
+  },
+  async onLoginWithProfile(localUser){
+    _supaUser={id:localUser.userId,email:localUser.email||''};
+    _supaProfile={name:localUser.name,role:localUser.role};
+    SupaAuth.applyMenus();SupaAuth.renderUser();
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('app-screen').style.display='flex';
+    await supaLoadAll();
+    startRealtime();
+    route();
+  },
+  applyMenus(){
+    const role=_supaProfile?.role||'일반직원';
+    const allowed=ROLE_MENUS[role]||ROLE_MENUS['일반직원'];
+    document.querySelectorAll('#nav a[data-v]').forEach(function(a){
+      a.style.display=allowed.includes(a.getAttribute('data-v'))?'':'none';
+    });
+    const showCF=['bank','match','savings'].some(function(v){return allowed.includes(v);});
+    document.querySelectorAll('#nav .grp').forEach(function(grp){
+      if(grp.textContent.trim()==='CF') grp.style.display=showCF?'':'none';
+    });
+  },
+  renderUser(){
+    const el=document.getElementById('supa-user');if(!el)return;
+    const name=_supaProfile?.name||'';
+    const role=_supaProfile?.role||'일반직원';
+    const roleColor=role==='관리자'?'#5fc7b4':'#90b4e0';
+    el.innerHTML='<div style="color:#cfd9d6;font-weight:700;font-size:12.5px;margin-bottom:2px">'+esc(name)+'</div>'
+      +'<div style="color:'+roleColor+';font-size:11px;margin-bottom:8px">'+esc(role)+'</div>'
+      +'<button onclick="SupaAuth.logout()" style="width:100%;background:transparent;border:1px solid #3a4f4a;color:#7d918c;border-radius:6px;padding:5px;font-size:11px;cursor:pointer">로그아웃</button>';
+  },
+  async logout(){
+    if(!confirm('로그아웃 하시겠습니까?'))return;
+    stopRealtime();
+    await supa.auth.signOut();
+    _supaUser=null;_supaProfile=null;
+    localStorage.removeItem('ensign_local_user');
+    localStorage.setItem('ensign_pin_fail','0');
+    document.getElementById('app-screen').style.display='none';
+    document.getElementById('login-screen').style.display='flex';
+    PinAuth.showPinLogin();
+  }
+};
+
+/* ===== SupaDB — 데이터 저장/로드 ===== */
+const _conv={
+  ctTo:function(c){return{id:c.id,no:c.no,year:c.year,type_code:c.typeCode,name:c.name,client:c.client,supply:c.supply||0,vat:c.vat||0,toe:c.toe||null,grade:c.grade||null,pay_kinds:c.payKinds||[],manager:c.manager||null,contract_date:c.contractDate||null,memo:c.memo||null};},
+  ctFrom:function(r){return{id:r.id,no:r.no,year:r.year,typeCode:r.type_code,name:r.name,client:r.client,supply:Number(r.supply||0),vat:Number(r.vat||0),toe:r.toe,grade:r.grade,payKinds:r.pay_kinds||[],manager:r.manager,contractDate:r.contract_date,memo:r.memo};},
+  invTo:function(v){return{id:v.id,contract_id:v.contractId,kind:v.kind,issue_date:v.issueDate||null,supply:v.supply||0,vat:v.vat||0,paid:v.paid||false,paid_date:v.paidDate||null,memo:v.memo||null};},
+  invFrom:function(r){return{id:r.id,contractId:r.contract_id,kind:r.kind,issueDate:r.issue_date,supply:Number(r.supply||0),vat:Number(r.vat||0),paid:r.paid,paidDate:r.paid_date,memo:r.memo};},
+  bankTo:function(b){return{id:b.id,date:b.date,bank_desc:b.desc||'',deposit:b.deposit||0,withdraw:b.withdraw||0,balance:b.balance||0,bank_name:b.bankName||'',memo:b.memo||null,match_invoice_id:b.matchInvoiceId||null};},
+  bankFrom:function(r){return{id:r.id,date:r.date,desc:r.bank_desc,deposit:Number(r.deposit||0),withdraw:Number(r.withdraw||0),balance:Number(r.balance||0),bankName:r.bank_name,memo:r.memo,matchInvoiceId:r.match_invoice_id};},
+  savTo:function(s){return{id:s.id,name:s.name,bank_name:s.bankName||'',monthly:s.monthly||0,start_date:s.startDate||null,maturity:s.maturity||null,payments:s.payments||[],memo:s.memo||null};},
+  savFrom:function(r){return{id:r.id,name:r.name,bankName:r.bank_name,monthly:Number(r.monthly||0),startDate:r.start_date,maturity:r.maturity,payments:r.payments||[],memo:r.memo};},
+  hrTo:function(h){return{id:h.id,name:h.name,dept:h.dept||null,position:h.position||null,rank:h.rank||null,join_date:h.joinDate||null,status:h.status||'재직',birth:h.birth||null,email:h.email||null,phone:h.phone||null,memo:h.memo||null};},
+  hrFrom:function(r){return{id:r.id,name:r.name,dept:r.dept,position:r.position,rank:r.rank,joinDate:r.join_date,status:r.status||'재직',birth:r.birth,email:r.email,phone:r.phone,memo:r.memo};},
+  ediagTo:function(d){return{id:d.id,contract_id:d.contractId,leader:d.leader||null,members:d.members||[],start_date:d.startDate||null,end_date:d.endDate||null,memo:d.memo||null,member_schedules:d.memberSchedules||{},files:d.files||{}};},
+  ediagFrom:function(r){return{id:r.id,contractId:r.contract_id,leader:r.leader,members:r.members||[],startDate:r.start_date,endDate:r.end_date,memo:r.memo,memberSchedules:r.member_schedules||{},files:r.files||{}};},
+};
+
+async function supaLoadAll(){
+  try{
+    const results=await Promise.all([
+      supa.from('contracts').select('*').order('no',{ascending:false}),
+      supa.from('invoices').select('*'),
+      supa.from('bank').select('*').order('date',{ascending:true}),
+      supa.from('savings').select('*'),
+      supa.from('hr').select('*'),
+      supa.from('ediag').select('*'),
+      supa.from('auth_settings').select('*').eq('id',1).maybeSingle(),
+    ]);
+    State.contracts=(results[0].data||[]).map(_conv.ctFrom);
+    State.invoices=(results[1].data||[]).map(_conv.invFrom);
+    State.bank=(results[2].data||[]).map(_conv.bankFrom);
+    State.savings=(results[3].data||[]).map(_conv.savFrom);
+    State.hr=(results[4].data||[]).map(_conv.hrFrom);
+    State.ediag=(results[5].data||[]).map(_conv.ediagFrom);
+    State.auth=results[6].data?{roles:results[6].data.roles||{},users:results[6].data.users||{}}:{roles:{},users:{}};
+  }catch(e){console.error('로드 오류:',e);}
+}
+
+State.saveAll=async function(){
+  if(!_supaUser)return;
+  try{
+    var jobs=[];
+    if(State.contracts.length) jobs.push(supa.from('contracts').upsert(State.contracts.map(_conv.ctTo)));
+    if(State.invoices.length)  jobs.push(supa.from('invoices').upsert(State.invoices.map(_conv.invTo)));
+    if(State.bank.length)      jobs.push(supa.from('bank').upsert(State.bank.map(_conv.bankTo)));
+    if(State.savings.length)   jobs.push(supa.from('savings').upsert(State.savings.map(_conv.savTo)));
+    if(State.hr.length)        jobs.push(supa.from('hr').upsert(State.hr.map(_conv.hrTo)));
+    if(State.ediag.length)     jobs.push(supa.from('ediag').upsert(State.ediag.map(_conv.ediagTo)));
+    jobs.push(supa.from('auth_settings').upsert({id:1,roles:State.auth.roles||{},users:State.auth.users||{}}));
+    await Promise.all(jobs);
+  }catch(e){console.error('저장 오류:',e);toast('저장 오류: '+e.message);}
+};
+
+async function migrateToSupabase(){
+  if(!confirm('현재 화면의 데이터를 Supabase로 이전합니다. 계속할까요?'))return;
+  try{
+    // State에 있는 현재 데이터를 Supabase로 저장
+    var cts=State.contracts, invs=State.invoices, bank=State.bank;
+    var sav=State.savings, hr=State.hr, ediag=State.ediag;
+    var auth=State.auth||{roles:{},users:{}};
+    if(!cts.length&&!hr.length){toast('이전할 데이터가 없습니다');return;}
+    toast('이전 중...');
+    var jobs=[];
+    if(cts.length)   jobs.push(supa.from('contracts').upsert(cts.map(_conv.ctTo)));
+    if(invs.length)  jobs.push(supa.from('invoices').upsert(invs.map(_conv.invTo)));
+    if(bank.length)  jobs.push(supa.from('bank').upsert(bank.map(_conv.bankTo)));
+    if(sav.length)   jobs.push(supa.from('savings').upsert(sav.map(_conv.savTo)));
+    if(hr.length)    jobs.push(supa.from('hr').upsert(hr.map(_conv.hrTo)));
+    if(ediag.length) jobs.push(supa.from('ediag').upsert(ediag.map(_conv.ediagTo)));
+    jobs.push(supa.from('auth_settings').upsert({id:1,roles:auth.roles||{},users:auth.users||{}}));
+    var results=await Promise.all(jobs);
+    // 오류 확인
+    var errors=results.filter(function(r){return r&&r.error;});
+    if(errors.length){toast('일부 오류: '+errors[0].error.message);return;}
+    // staff_profiles hr 동기화
+    if(hr.length){
+      await supa.from('staff_profiles').upsert(hr.map(function(h){
+        return {id:h.id,name:h.name,email:h.email||null,role:'일반직원'};
+      }),{onConflict:'id',ignoreDuplicates:true});
+      // 류정일은 관리자로
+      await supa.from('staff_profiles').update({role:'관리자'}).eq('name','류정일');
+    }
+    toast('✅ 이전 완료! 계약 '+cts.length+'건 · 직원 '+hr.length+'명 · 거래 '+bank.length+'건');
+  }catch(e){console.error(e);toast('마이그레이션 오류: '+e.message);}
+}
+
+/* ===== 실시간 동기화 ===== */
+var _realtimeChannel=null;
+function startRealtime(){
+  if(_realtimeChannel)return;
+  _realtimeChannel=supa.channel('erp-sync')
+    .on('postgres_changes',{event:'*',schema:'public',table:'contracts'},function(){_syncAndRender('contracts','contracts',_conv.ctFrom);})
+    .on('postgres_changes',{event:'*',schema:'public',table:'invoices'},function(){_syncAndRender('invoices','invoices',_conv.invFrom);})
+    .on('postgres_changes',{event:'*',schema:'public',table:'bank'},function(){_syncAndRender('bank','bank',_conv.bankFrom);})
+    .on('postgres_changes',{event:'*',schema:'public',table:'savings'},function(){_syncAndRender('savings','savings',_conv.savFrom);})
+    .on('postgres_changes',{event:'*',schema:'public',table:'hr'},function(){_syncAndRender('hr','hr',_conv.hrFrom);})
+    .on('postgres_changes',{event:'*',schema:'public',table:'ediag'},function(){_syncAndRender('ediag','ediag',_conv.ediagFrom);})
+    .subscribe(function(status){
+      var badge=document.getElementById('sync-badge');
+      if(!badge){badge=document.createElement('div');badge.id='sync-badge';badge.style.cssText='padding:4px 10px;font-size:10.5px;font-weight:600;border-radius:10px;margin:4px 14px;text-align:center';var u=document.getElementById('supa-user');if(u)u.parentNode.insertBefore(badge,u);}
+      if(status==='SUBSCRIBED'){badge.textContent='● 실시간 동기화 중';badge.style.background='#1b5e20';badge.style.color='#a5d6a7';}
+      else{badge.textContent='○ 동기화 끊김';badge.style.background='#3a0000';badge.style.color='#ef9a9a';setTimeout(function(){_realtimeChannel=null;startRealtime();},5000);}
+    });
+}
+function stopRealtime(){if(_realtimeChannel){supa.removeChannel(_realtimeChannel);_realtimeChannel=null;}}
+function _syncAndRender(supaTable,stateKey,fromFn){
+  supa.from(supaTable).select('*').then(function(res){
+    if(res.data) State[stateKey]=(res.data).map(fromFn);
+    clearTimeout(window._rerenderTimer);
+    window._rerenderTimer=setTimeout(function(){var h=location.hash.replace('#','')||'contracts';try{if(Views[h])Views[h]();}catch(e){}},300);
+  });
+}
+
+/* ===== PinAuth — 6자리 PIN 로그인 ===== */
+const PinAuth={
+  _setupPin:'',_confirmPin:'',_loginPin:'',_step:'setup',_localUser:null,
+  async init(){
+    try{this._localUser=JSON.parse(localStorage.getItem('ensign_local_user')||'null');}catch(e){}
+    if(this._localUser){this.showPinLogin();}else{this.showSetup();}
+  },
+  showSetup(){
+    document.getElementById('pin-setup').style.display='block';
+    document.getElementById('pin-login').style.display='none';
+    document.getElementById('email-login').style.display='none';
+    this._setupPin='';this._confirmPin='';this._step='setup';
+    this._renderKeypad('setup-keypad','setup');
+    this._dots('setup-dots',0);this._dots('confirm-dots',0);
+    document.getElementById('setup-error').style.display='none';
+    var cw=document.getElementById('confirm-wrap');if(cw)cw.style.display='none';
+    var pl=document.getElementById('setup-pin-label');if(pl){pl.textContent='PIN 설정 (6자리)';pl.style.color='#5e716c';}
+    setTimeout(function(){var n=document.getElementById('setup-name');if(n)n.focus();},100);
+  },
+  showPinLogin(){
+    document.getElementById('pin-setup').style.display='none';
+    document.getElementById('pin-login').style.display='block';
+    document.getElementById('email-login').style.display='none';
+    this._loginPin='';
+    document.getElementById('pin-greeting').textContent='안녕하세요, '+(this._localUser?.name||'')+'님';
+    this._renderKeypad('login-keypad','login');
+    this._dots('pin-dots',0);
+    document.getElementById('pin-error').style.display='none';
+  },
+  showEmailLogin(){
+    document.getElementById('pin-setup').style.display='none';
+    document.getElementById('pin-login').style.display='none';
+    document.getElementById('email-login').style.display='block';
+  },
+  _dots(id,n){
+    var el=document.getElementById(id);if(!el)return;
+    el.innerHTML=Array.from({length:6},function(_,i){return '<div style="width:14px;height:14px;border-radius:50%;border:2px solid '+(i<n?'#0e5e54':'#ccc')+';background:'+(i<n?'#0e5e54':'#fff')+'"></div>';}).join('');
+  },
+  _renderKeypad(id,mode){
+    var el=document.getElementById(id);if(!el)return;
+    var keys=['1','2','3','4','5','6','7','8','9','관리자','0','←'];
+    el.innerHTML='';
+    keys.forEach(function(k){
+      var btn=document.createElement('button');
+      btn.style.cssText='padding:14px;border:1px solid #e0e0e0;border-radius:10px;cursor:pointer;';
+      if(k==='관리자'){btn.style.display='none';}
+      else if(k==='←'){btn.textContent='←';btn.style.cssText+='font-size:18px;color:#5e716c;background:#f0f5f3';btn.onclick=function(){PinAuth._del(mode);};}
+      else{btn.textContent=k;btn.style.cssText+='font-size:20px;font-weight:700;color:#1a3a30;background:#fff';(function(d){btn.onclick=function(){PinAuth._input(d,mode);};})(k);}
+      el.appendChild(btn);
+    });
+  },
+  _input(digit,mode){
+    var self=this;
+    if(mode==='setup'){
+      if(this._step==='setup'){
+        if(this._setupPin.length>=6)return;
+        this._setupPin+=digit;this._dots('setup-dots',this._setupPin.length);
+        if(this._setupPin.length===6) setTimeout(function(){self._step='confirm';document.getElementById('confirm-wrap').style.display='block';document.getElementById('setup-pin-label').textContent='PIN 설정 완료 ✓';document.getElementById('setup-pin-label').style.color='#2e7d32';},200);
+      } else {
+        if(this._confirmPin.length>=6)return;
+        this._confirmPin+=digit;this._dots('confirm-dots',this._confirmPin.length);
+        if(this._confirmPin.length===6) setTimeout(function(){self._finishSetup();},200);
+      }
+    } else {
+      if(this._loginPin.length>=6)return;
+      this._loginPin+=digit;this._dots('pin-dots',this._loginPin.length);
+      if(this._loginPin.length===6) setTimeout(function(){self._verifyPin();},200);
+    }
+  },
+  _del(mode){
+    if(mode==='setup'){
+      if(this._step==='setup'){this._setupPin=this._setupPin.slice(0,-1);this._dots('setup-dots',this._setupPin.length);}
+      else{this._confirmPin=this._confirmPin.slice(0,-1);this._dots('confirm-dots',this._confirmPin.length);}
+    } else {this._loginPin=this._loginPin.slice(0,-1);this._dots('pin-dots',this._loginPin.length);}
+  },
+  async _finishSetup(){
+    var name=(document.getElementById('setup-name')?.value||'').trim();
+    var errEl=document.getElementById('setup-error');
+    if(!name){errEl.textContent='이름을 입력해주세요';errEl.style.display='block';this._confirmPin='';this._dots('confirm-dots',0);return;}
+    if(this._setupPin!==this._confirmPin){errEl.textContent='PIN이 일치하지 않습니다';errEl.style.display='block';this._setupPin='';this._confirmPin='';this._step='setup';this._dots('setup-dots',0);this._dots('confirm-dots',0);return;}
+    // hr 테이블에서 직원 확인
+    var res=await supa.from('hr').select('id,name,rank,dept').eq('name',name);
+    if(!res.data||res.data.length===0){errEl.textContent="'"+name+"' 직원을 찾을 수 없습니다. 인사관리에 등록된 정확한 이름을 입력해주세요";errEl.style.display='block';this._setupPin='';this._confirmPin='';this._step='setup';this._dots('setup-dots',0);this._dots('confirm-dots',0);return;}
+    var hr=res.data[0];
+    // staff_profiles에서 역할 확인
+    var profRes=await supa.from('staff_profiles').select('role,email').eq('name',name);
+    var role=(profRes.data&&profRes.data.length>0&&profRes.data[0].role)?profRes.data[0].role:'일반직원';
+    var email=(profRes.data&&profRes.data.length>0&&profRes.data[0].email)?profRes.data[0].email:'';
+    var localUser={userId:hr.id,name:hr.name,role:role,email:email,rank:hr.rank,dept:hr.dept};
+    var pinHash=this._hash(this._setupPin,hr.id);
+    localStorage.setItem('ensign_local_user',JSON.stringify(Object.assign({},localUser,{pinHash:pinHash})));
+    localStorage.setItem('ensign_pin_fail','0');
+    this._localUser=localUser;
+    this.showPinLogin();
+  },
+  async _verifyPin(){
+    var errEl=document.getElementById('pin-error');errEl.style.display='none';
+    var stored=JSON.parse(localStorage.getItem('ensign_local_user')||'null');
+    var failCount=parseInt(localStorage.getItem('ensign_pin_fail')||'0');
+    if(failCount>=5){
+      var lockTime=parseInt(localStorage.getItem('ensign_pin_lock')||'0');
+      if(Date.now()-lockTime<5*60*1000){var remain=Math.ceil((5*60*1000-(Date.now()-lockTime))/60000);errEl.textContent='PIN 5회 오류. '+remain+'분 후 다시 시도하세요.';errEl.style.display='block';this._loginPin='';this._dots('pin-dots',0);return;}
+      else{localStorage.setItem('ensign_pin_fail','0');}
+    }
+    var pinHash=this._hash(this._loginPin,stored?.userId||'');
+    if(stored&&pinHash===stored.pinHash){
+      localStorage.setItem('ensign_pin_fail','0');
+      // staff_profiles에서 최신 역할 다시 조회
+      var profRes=await supa.from('staff_profiles').select('role,email').eq('name',stored.name);
+      if(profRes.data&&profRes.data.length>0){stored.role=profRes.data[0].role||stored.role;}
+      this._localUser=stored;
+      SupaAuth.onLoginWithProfile(stored);
+    } else {
+      var newFail=failCount+1;localStorage.setItem('ensign_pin_fail',String(newFail));
+      if(newFail>=5) localStorage.setItem('ensign_pin_lock',String(Date.now()));
+      errEl.textContent='PIN이 올바르지 않습니다. ('+newFail+'/5회)';errEl.style.display='block';
+      var dots=document.getElementById('pin-dots');if(dots){dots.style.transform='translateX(8px)';setTimeout(function(){dots.style.transform='';},100);}
+      this._loginPin='';this._dots('pin-dots',0);
+    }
+  },
+  cancelSetup(){this.showPinLogin();},
+  switchUser(){localStorage.removeItem('ensign_local_user');localStorage.setItem('ensign_pin_fail','0');this._localUser=null;this.showSetup();},
+  _hash:function(pin,salt){var h=0;var s=pin+salt+'ensign2024';for(var i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h=h&h;}return Math.abs(h).toString(36)+s.length.toString(36);}
+};
+
+/* ===== 자동 업데이트 ===== */
+const Updater={
+  async check(silent){
+    try{
+      var res=await fetch(UPDATE_URL+'?t='+Date.now());
+      if(!res.ok) throw new Error('서버 오류');
+      var info=await res.json();
+      var latest=info.version||'0.0.0';
+      var a=latest.split('.').map(Number),b=APP_VERSION.split('.').map(Number);
+      var isNewer=false;for(var i=0;i<3;i++){if((a[i]||0)>(b[i]||0)){isNewer=true;break;}if((a[i]||0)<(b[i]||0))break;}
+      if(isNewer){
+        var changes=(info.changes||[]).map(function(c){return '<li>'+esc(c)+'</li>';}).join('');
+        UI.openModal('업데이트 알림','<div style="background:#e8f5e9;border-radius:8px;padding:12px;margin-bottom:12px"><b>새 버전 v'+esc(info.version)+'</b><br>현재: v'+APP_VERSION+'</div>'+(changes?'<ul>'+changes+'</ul>':''),[
+          {label:'나중에',onClick:UI.closeModal},
+          {label:'⬇ 다운로드',cls:'pri',onClick:function(){window.open(DOWNLOAD_URL);UI.closeModal();}}
+        ]);
+      } else {if(!silent) toast('최신 버전입니다 (v'+APP_VERSION+')');}
+    }catch(e){if(!silent) toast('업데이트 서버에 연결할 수 없습니다');}
+  }
+};
+
+/* ===== 설정 화면 업데이트/마이그레이션 버튼 추가 ===== */
+var _origSettings=Views.settings;
+Views.settings=function(){
+  _origSettings();
+  var content=document.getElementById('content');if(!content)return;
+  var card=document.createElement('div');
+  card.innerHTML='<div class="card" style="margin-top:14px"><div class="hd"><h2>☁ Supabase / 업데이트</h2></div><div class="bd" style="display:flex;gap:10px;flex-wrap:wrap">'
+    +'<button class="btn" style="background:#1565c0;color:#fff" onclick="migrateToSupabase()">기존 데이터 → Supabase 이전</button>'
+    +'<button class="btn pri" onclick="Updater.check(false)">🔄 업데이트 확인 (v'+APP_VERSION+')</button>'
+    +'</div></div>';
+  content.appendChild(card);
+};
+
+/* ===== 초기 실행 ===== */
+(async function(){
+  try{
+    var session=(await supa.auth.getSession()).data.session;
+    if(session){await SupaAuth.onLogin(session.user);}
+    else{await PinAuth.init();}
+  }catch(e){console.error('초기화 오류:',e);PinAuth.init();}
+})();
+</script>
 </body>
 </html>
 <script>
@@ -2445,8 +2741,10 @@ function _renderAuthUser(){
       <td class="ctr">
         <select style="font-size:12px;border:1px solid var(--line);border-radius:6px;padding:5px 8px"
           onchange="Auth.setUserRole('${e.id}',this.value)">
-          <option value="">-- 미배정 --</option>
-          ${roles.map(r=>`<option value="${r}" ${cur===r?'selected':''}>${r}</option>`).join('')}
+          <option value="">-- 선택 --</option>
+          ${['관리자','부관리자','계약담당','진단팀장','자금담당','일반직원']
+            .concat(Object.keys(State.auth.roles||{}).filter(r=>!['관리자','부관리자','계약담당','진단팀장','자금담당','일반직원'].includes(r)))
+            .map(r=>`<option value="${r}" ${cur===r?'selected':''}>${r}</option>`).join('')}
         </select>
       </td>
       <td class="ctr">${cur?`<span class="tag ${cur==='관리자'?'t1':cur==='열람전용'?'gray':'t4'}">${esc(cur)}</span>`:'<span style="color:var(--ink3);font-size:12px">미배정</span>'}</td>
@@ -2484,7 +2782,22 @@ const Auth = {
   setUserRole(empId, role){
     if(role){ State.auth.users[empId] = role; }
     else     { delete State.auth.users[empId]; }
-    State.saveAll(); _renderAuthUser(); toast('역할이 저장되었습니다');
+    State.saveAll();
+    // staff_profiles 동시 업데이트
+    var hr2 = State.hr.find(function(h){ return h.id===empId; });
+    if(hr2 && hr2.name){
+      var newRole = role || '일반직원';
+      supa.from('staff_profiles').update({role: newRole}).eq('name', hr2.name).then(function(){
+        toast(hr2.name + ' 역할 → ' + newRole);
+      });
+    } else {
+      toast('역할이 저장되었습니다');
+    }
+    // 드롭다운 값만 업데이트 (화면 리렌더 없이)
+    var badge = document.querySelector('tr td select[onchange*="' + empId + '"]');
+    if(badge) badge.value = role||'';
+    var tagEl = badge ? badge.closest('tr').querySelector('td:last-child span') : null;
+    if(tagEl){ tagEl.textContent = role||'미배정'; }
   },
   addRole(){
     const inp = document.getElementById('new-role-name');
@@ -3283,771 +3596,5 @@ window.EdiagMail = {
     XLSX.writeFile(wb, fname);
     toast('엑셀 다운로드 완료');
   }
-};
-</script>
-<script>
-/* =====================================================
-   SupaAuth — 로그인/로그아웃/세션/메뉴제어
-===================================================== */
-const SupaAuth = {
-  async login(){
-    const email = (document.getElementById('login-email')?.value||'').trim();
-    const pw    = document.getElementById('login-pw')?.value||'';
-    const errEl = document.getElementById('login-error');
-    const btn   = document.getElementById('login-btn');
-    errEl.style.display='none';
-    if(!email||!pw){ errEl.textContent='이메일과 비밀번호를 입력해주세요'; errEl.style.display='block'; return; }
-    btn.textContent='로그인 중...'; btn.disabled=true;
-    try{
-      const {data,error} = await supa.auth.signInWithPassword({email,password:pw});
-      if(error) throw error;
-      await SupaAuth.onLogin(data.user);
-    } catch(e){
-      errEl.textContent = (e.message||'').includes('Invalid') ? '이메일 또는 비밀번호가 올바르지 않습니다' : (e.message||'로그인 실패');
-      errEl.style.display='block';
-      btn.textContent='로그인'; btn.disabled=false;
-    }
-  },
-
-  async onLogin(user){
-    _supaUser = user;
-    // 프로필 로드 (없으면 관리자로 생성)
-    const {data:prof} = await supa.from('staff_profiles').select('*').eq('id',user.id).maybeSingle();
-    if(prof){
-      _supaProfile = prof;
-    } else {
-      const {data:newProf} = await supa.from('staff_profiles')
-        .upsert({id:user.id, email:user.email, name:user.email.split('@')[0], role:'관리자'})
-        .select().single();
-      _supaProfile = newProf;
-    }
-    // 메뉴 필터 + 사용자 정보 표시
-    SupaAuth.applyMenus();
-    SupaAuth.renderUser();
-    // 데이터 로드 후 화면 전환
-    document.getElementById('login-screen').style.display='none';
-    document.getElementById('app-screen').style.display='flex';
-    document.body.style.overflow='hidden';
-    await supaLoadAll();
-    route();
-  },
-
-  applyMenus(){
-    const role    = _supaProfile?.role || '일반직원';
-    const allowed = ROLE_MENUS[role] || ROLE_MENUS['일반직원'];
-    // nav 링크 표시/숨김
-    document.querySelectorAll('#nav a[data-v]').forEach(a=>{
-      a.style.display = allowed.includes(a.getAttribute('data-v')) ? '' : 'none';
-    });
-    // CF 헤더: bank/match/savings 중 허용된 것이 있으면 표시
-    const showCF = ['bank','match','savings'].some(v=>allowed.includes(v));
-    document.querySelectorAll('#nav .grp').forEach(grp=>{
-      if(grp.textContent.trim()==='CF') grp.style.display = showCF?'':'none';
-    });
-  },
-
-  renderUser(){
-    const el   = document.getElementById('supa-user');
-    if(!el) return;
-    const name = _supaProfile?.name || _supaUser?.email || '';
-    const role = _supaProfile?.role || '일반직원';
-    const roleColor = role==='관리자'?'#5fc7b4':'#90b4e0';
-    el.innerHTML = `
-      <div style="color:#cfd9d6;font-weight:700;font-size:12.5px;margin-bottom:2px">${esc(name)}</div>
-      <div style="color:${roleColor};font-size:11px;margin-bottom:8px">${esc(role)}</div>
-      <button onclick="SupaAuth.logout()"
-        style="width:100%;background:transparent;border:1px solid #3a4f4a;color:#7d918c;border-radius:6px;padding:5px;font-size:11px;cursor:pointer">
-        로그아웃
-      </button>`;
-  },
-
-  async logout(){
-    if(!confirm('로그아웃 하시겠습니까?')) return;
-    await supa.auth.signOut();
-    _supaUser=null; _supaProfile=null;
-    document.getElementById('app-screen').style.display='none';
-    document.getElementById('login-screen').style.display='flex';
-    document.getElementById('login-pw').value='';
-    document.getElementById('login-error').style.display='none';
-    document.getElementById('login-btn').textContent='로그인';
-    document.getElementById('login-btn').disabled=false;
-    document.body.style.overflow='';
-  }
-};
-
-/* 세션 복원 — 페이지 로드 시 자동 로그인 */
-(async()=>{
-  try{
-    const {data:{session}} = await supa.auth.getSession();
-    if(session){
-      await SupaAuth.onLogin(session.user);
-    }
-    // 세션 없으면 로그인 화면 유지
-  } catch(e){
-    console.error('세션 복원 오류:', e);
-    // 오류가 나도 로그인 화면은 보임
-  }
-})();
-</script>
-<script>
-/* =====================================================
-   SupaDB — Supabase 데이터 저장/로드 엔진
-   State.saveAll()을 Supabase 버전으로 완전 교체
-===================================================== */
-
-/* snake_case ↔ camelCase 변환 헬퍼 */
-const _conv = {
-  ctTo:  c=>({ id:c.id, no:c.no, year:c.year, type_code:c.typeCode,
-    name:c.name, client:c.client, supply:c.supply||0, vat:c.vat||0,
-    toe:c.toe||null, grade:c.grade||null, pay_kinds:c.payKinds||[],
-    manager:c.manager||null, contract_date:c.contractDate||null, memo:c.memo||null }),
-  ctFrom: r=>({ id:r.id, no:r.no, year:r.year, typeCode:r.type_code,
-    name:r.name, client:r.client, supply:Number(r.supply||0), vat:Number(r.vat||0),
-    toe:r.toe, grade:r.grade, payKinds:r.pay_kinds||[],
-    manager:r.manager, contractDate:r.contract_date, memo:r.memo }),
-
-  invTo:  v=>({ id:v.id, contract_id:v.contractId, kind:v.kind,
-    issue_date:v.issueDate||null, supply:v.supply||0, vat:v.vat||0,
-    paid:v.paid||false, paid_date:v.paidDate||null, memo:v.memo||null }),
-  invFrom: r=>({ id:r.id, contractId:r.contract_id, kind:r.kind,
-    issueDate:r.issue_date, supply:Number(r.supply||0), vat:Number(r.vat||0),
-    paid:r.paid, paidDate:r.paid_date, memo:r.memo }),
-
-  bankTo:  b=>({ id:b.id, date:b.date, bank_desc:b.desc||b.bank_desc||'',
-    deposit:b.deposit||0, withdraw:b.withdraw||0, balance:b.balance||0,
-    bank_name:b.bankName||b.bank_name||'', memo:b.memo||null,
-    match_invoice_id:b.matchInvoiceId||null }),
-  bankFrom: r=>({ id:r.id, date:r.date, desc:r.bank_desc,
-    deposit:Number(r.deposit||0), withdraw:Number(r.withdraw||0),
-    balance:Number(r.balance||0), bankName:r.bank_name, memo:r.memo,
-    matchInvoiceId:r.match_invoice_id }),
-
-  savTo:  s=>({ id:s.id, name:s.name, bank_name:s.bankName||s.bank_name||'',
-    monthly:s.monthly||0, start_date:s.startDate||s.start_date||null,
-    maturity:s.maturity||null, payments:s.payments||[], memo:s.memo||null }),
-  savFrom: r=>({ id:r.id, name:r.name, bankName:r.bank_name,
-    monthly:Number(r.monthly||0), startDate:r.start_date,
-    maturity:r.maturity, payments:r.payments||[], memo:r.memo }),
-
-  hrTo:  h=>({ id:h.id, name:h.name, dept:h.dept||null, position:h.position||null,
-    rank:h.rank||null, join_date:h.joinDate||h.join_date||null,
-    status:h.status||'재직', birth:h.birth||null,
-    email:h.email||null, phone:h.phone||null, memo:h.memo||null }),
-  hrFrom: r=>({ id:r.id, name:r.name, dept:r.dept, position:r.position,
-    rank:r.rank, joinDate:r.join_date, status:r.status||'재직',
-    birth:r.birth, email:r.email, phone:r.phone, memo:r.memo }),
-
-  ediagTo:  d=>({ id:d.id, contract_id:d.contractId,
-    leader:d.leader||null, members:d.members||[],
-    start_date:d.startDate||null, end_date:d.endDate||null,
-    memo:d.memo||null, member_schedules:d.memberSchedules||{},
-    files:d.files||{} }),
-  ediagFrom: r=>({ id:r.id, contractId:r.contract_id,
-    leader:r.leader, members:r.members||[],
-    startDate:r.start_date, endDate:r.end_date,
-    memo:r.memo, memberSchedules:r.member_schedules||{},
-    files:r.files||{} }),
-};
-
-/* 전체 데이터 로드 (로그인 후 1회) */
-async function supaLoadAll(){
-  toast('데이터 로딩 중...');
-  try{
-    const [cts,invs,bank,sav,hr,ediag,authS] = await Promise.all([
-      supa.from('contracts').select('*').order('no',{ascending:false}),
-      supa.from('invoices').select('*'),
-      supa.from('bank').select('*').order('date',{ascending:true}),
-      supa.from('savings').select('*'),
-      supa.from('hr').select('*'),
-      supa.from('ediag').select('*'),
-      supa.from('auth_settings').select('*').eq('id',1).maybeSingle(),
-    ]);
-    State.contracts = (cts.data||[]).map(_conv.ctFrom);
-    State.invoices  = (invs.data||[]).map(_conv.invFrom);
-    State.bank      = (bank.data||[]).map(_conv.bankFrom);
-    State.savings   = (sav.data||[]).map(_conv.savFrom);
-    State.hr        = (hr.data||[]).map(_conv.hrFrom);
-    State.ediag     = (ediag.data||[]).map(_conv.ediagFrom);
-    State.auth      = authS.data
-      ? {roles:authS.data.roles||{},users:authS.data.users||{}}
-      : {roles:{},users:{}};
-    toast('데이터 로딩 완료');
-  } catch(e){
-    console.error('데이터 로드 오류:', e);
-    toast('데이터 로드 오류: ' + e.message);
-  }
-}
-
-/* State.saveAll 재정의 → Supabase 저장 */
-State.saveAll = async function(){
-  if(!_supaUser){ return; } // 미로그인 시 무시
-  try{
-    // 변경된 전체 데이터 upsert
-    await Promise.all([
-      supa.from('contracts').upsert(State.contracts.map(_conv.ctTo)),
-      supa.from('invoices').upsert(State.invoices.map(_conv.invTo)),
-      supa.from('bank').upsert(State.bank.map(_conv.bankTo)),
-      supa.from('savings').upsert(State.savings.map(_conv.savTo)),
-      supa.from('hr').upsert(State.hr.map(_conv.hrTo)),
-      supa.from('ediag').upsert(State.ediag.map(_conv.ediagTo)),
-      supa.from('auth_settings').upsert({
-        id:1, roles:State.auth.roles||{}, users:State.auth.users||{}
-      }),
-    ]);
-  } catch(e){
-    console.error('저장 오류:', e);
-    toast('저장 오류: ' + e.message);
-  }
-};
-
-/* 마이그레이션: localStorage → Supabase */
-async function migrateToSupabase(){
-  if(!confirm('localStorage의 기존 데이터를 Supabase로 이전합니다.\n이미 Supabase에 있는 데이터는 덮어씁니다. 계속할까요?')) return;
-  toast('마이그레이션 중...');
-  try{
-    // localStorage에서 직접 읽기
-    const read = (k,d) => { try{ return JSON.parse(localStorage.getItem('enzain_'+k)||'null')||d; }catch(e){return d;} };
-    const cts   = read('contracts',[]);
-    const invs  = read('invoices',[]);
-    const bank  = read('bank',[]);
-    const sav   = read('savings',[]);
-    const hr    = read('hr',[]);
-    const ediag = read('ediag',[]);
-    const auth  = read('auth',{roles:{},users:{}});
-
-    if(!cts.length && !hr.length){
-      toast('localStorage에 데이터가 없습니다');
-      return;
-    }
-
-    await Promise.all([
-      cts.length   ? supa.from('contracts').upsert(cts.map(_conv.ctTo))     : Promise.resolve(),
-      invs.length  ? supa.from('invoices').upsert(invs.map(_conv.invTo))    : Promise.resolve(),
-      bank.length  ? supa.from('bank').upsert(bank.map(_conv.bankTo))       : Promise.resolve(),
-      sav.length   ? supa.from('savings').upsert(sav.map(_conv.savTo))      : Promise.resolve(),
-      hr.length    ? supa.from('hr').upsert(hr.map(_conv.hrTo))             : Promise.resolve(),
-      ediag.length ? supa.from('ediag').upsert(ediag.map(_conv.ediagTo))   : Promise.resolve(),
-      supa.from('auth_settings').upsert({id:1, roles:auth.roles||{}, users:auth.users||{}}),
-    ]);
-
-    // State 갱신
-    await supaLoadAll();
-    route();
-    toast(`✅ 마이그레이션 완료: 계약 ${cts.length}건 · 직원 ${hr.length}명 · 거래 ${bank.length}건`);
-  } catch(e){
-    console.error('마이그레이션 오류:', e);
-    toast('마이그레이션 오류: ' + e.message);
-  }
-}
-</script>
-<script>
-/* =====================================================
-   실시간 자동 동기화 — Supabase Realtime
-   다른 사용자가 데이터 변경 시 자동으로 화면 갱신
-===================================================== */
-let _realtimeChannel = null;
-
-function startRealtime(){
-  if(_realtimeChannel) return; // 이미 구독 중
-
-  _realtimeChannel = supa
-    .channel('erp-sync')
-    // 계약관리
-    .on('postgres_changes', {event:'*', schema:'public', table:'contracts'},
-      async()=>{ await _syncTable('contracts','contracts',_conv.ctFrom); _rerenderCurrent(); })
-    // 세금계산서
-    .on('postgres_changes', {event:'*', schema:'public', table:'invoices'},
-      async()=>{ await _syncTable('invoices','invoices',_conv.invFrom); _rerenderCurrent(); })
-    // 통장거래
-    .on('postgres_changes', {event:'*', schema:'public', table:'bank'},
-      async()=>{ await _syncTable('bank','bank',_conv.bankFrom); _rerenderCurrent(); })
-    // 적금
-    .on('postgres_changes', {event:'*', schema:'public', table:'savings'},
-      async()=>{ await _syncTable('savings','savings',_conv.savFrom); _rerenderCurrent(); })
-    // 인사관리
-    .on('postgres_changes', {event:'*', schema:'public', table:'hr'},
-      async()=>{ await _syncTable('hr','hr',_conv.hrFrom); _rerenderCurrent(); })
-    // 에너지진단
-    .on('postgres_changes', {event:'*', schema:'public', table:'ediag'},
-      async()=>{ await _syncTable('ediag','ediag',_conv.ediagFrom); _rerenderCurrent(); })
-    .subscribe((status)=>{
-      if(status==='SUBSCRIBED'){
-        console.log('✅ 실시간 동기화 시작');
-        _showSyncBadge(true);
-      } else if(status==='CLOSED'||status==='CHANNEL_ERROR'){
-        console.warn('실시간 동기화 끊김, 재연결 시도...');
-        _showSyncBadge(false);
-        // 5초 후 재연결
-        setTimeout(()=>{ _realtimeChannel=null; startRealtime(); }, 5000);
-      }
-    });
-}
-
-function stopRealtime(){
-  if(_realtimeChannel){
-    supa.removeChannel(_realtimeChannel);
-    _realtimeChannel = null;
-    _showSyncBadge(false);
-  }
-}
-
-// 테이블별 부분 동기화 (전체 재로드보다 빠름)
-async function _syncTable(supaTable, stateKey, fromFn){
-  try{
-    let q = supa.from(supaTable).select('*');
-    if(supaTable==='contracts') q = q.order('no',{ascending:false});
-    if(supaTable==='bank')      q = q.order('date',{ascending:true});
-    const {data, error} = await q;
-    if(error) throw error;
-    State[stateKey] = (data||[]).map(fromFn);
-  } catch(e){
-    console.error('동기화 오류:', supaTable, e);
-  }
-}
-
-// 현재 화면 자동 재렌더
-function _rerenderCurrent(){
-  const hash = location.hash.replace('#','') || 'contracts';
-  // 잠깐 딜레이 후 재렌더 (중복 이벤트 방지)
-  clearTimeout(window._rerenderTimer);
-  window._rerenderTimer = setTimeout(()=>{
-    try{
-      if(Views[hash]) Views[hash]();
-    } catch(e){ /* 무시 */ }
-  }, 300);
-}
-
-// 사이드바 동기화 상태 표시 뱃지
-function _showSyncBadge(connected){
-  let badge = document.getElementById('sync-badge');
-  if(!badge){
-    badge = document.createElement('div');
-    badge.id = 'sync-badge';
-    badge.style.cssText = 'padding:4px 10px;font-size:10.5px;font-weight:600;border-radius:10px;margin:6px 14px 0;text-align:center;transition:all .3s';
-    const userEl = document.getElementById('supa-user');
-    if(userEl) userEl.parentNode.insertBefore(badge, userEl);
-  }
-  if(connected){
-    badge.textContent = '● 실시간 동기화 중';
-    badge.style.background = '#1b5e20';
-    badge.style.color = '#a5d6a7';
-  } else {
-    badge.textContent = '○ 동기화 끊김';
-    badge.style.background = '#3a0000';
-    badge.style.color = '#ef9a9a';
-  }
-}
-
-// SupaAuth.onLogin에 startRealtime 연결
-const _origOnLogin = SupaAuth.onLogin.bind(SupaAuth);
-SupaAuth.onLogin = async function(user){
-  await _origOnLogin(user);
-  startRealtime();
-};
-
-// SupaAuth.logout에 stopRealtime 연결
-const _origLogout = SupaAuth.logout.bind(SupaAuth);
-SupaAuth.logout = async function(){
-  stopRealtime();
-  await _origLogout();
-};
-</script>
-<script>
-/* =====================================================
-   PinAuth — 6자리 PIN 로그인 시스템
-===================================================== */
-const PinAuth = {
-  _setupPin: '',      // 설정 중인 PIN
-  _confirmPin: '',    // 확인 PIN
-  _loginPin: '',      // 로그인 입력 PIN
-  _step: 'setup',     // 'setup' | 'confirm'
-  _localUser: null,   // 기기 저장 사용자
-
-  // 초기화 — 기기에 사용자 있으면 PIN 화면, 없으면 설정 화면
-  async init(){
-    const isElectron = window.electronAPI?.isElectron;
-    if(isElectron){
-      this._localUser = await window.electronAPI.getLocalUser();
-    } else {
-      // 웹 브라우저: localStorage 사용
-      try{ this._localUser = JSON.parse(localStorage.getItem('ensign_local_user')||'null'); }catch(e){}
-    }
-    if(this._localUser){
-      this.showPinLogin();
-    } else {
-      this.showSetup();
-    }
-  },
-
-  // 설정 화면 표시
-  showSetup(){
-    document.getElementById('pin-setup').style.display='block';
-    document.getElementById('pin-login').style.display='none';
-    document.getElementById('email-login').style.display='none';
-    this._setupPin=''; this._confirmPin=''; this._step='setup';
-    this._renderKeypad('setup-keypad','setup');
-    this._renderDots('setup-dots',0);
-    this._renderDots('confirm-dots',0,true);
-    document.getElementById('setup-error').style.display='none';
-    setTimeout(()=>document.getElementById('setup-name')?.focus(),100);
-  },
-
-  // PIN 로그인 화면 표시
-  showPinLogin(){
-    document.getElementById('pin-setup').style.display='none';
-    document.getElementById('pin-login').style.display='block';
-    document.getElementById('email-login').style.display='none';
-    this._loginPin='';
-    const name = this._localUser?.name||'';
-    document.getElementById('pin-greeting').textContent = `안녕하세요, ${name}님`;
-    this._renderKeypad('login-keypad','login');
-    this._renderDots('pin-dots',0);
-    document.getElementById('pin-error').style.display='none';
-  },
-
-  // 이메일 로그인 화면 (관리자 백업)
-  showEmailLogin(){
-    document.getElementById('pin-setup').style.display='none';
-    document.getElementById('pin-login').style.display='none';
-    document.getElementById('email-login').style.display='block';
-  },
-
-  // 키패드 렌더링
-  _renderKeypad(containerId, mode){
-    const el = document.getElementById(containerId);
-    if(!el) return;
-    const keys = ['1','2','3','4','5','6','7','8','9','관리자','0','←'];
-    el.innerHTML = keys.map(k=>{
-      if(k==='관리자'){
-        return `<button onclick="PinAuth.showEmailLogin()"
-          style="padding:14px;border:1px solid #e0e0e0;border-radius:10px;font-size:11px;font-weight:600;color:#aab5b3;background:#f9f9f9;cursor:pointer">관리자</button>`;
-      }
-      if(k==='←'){
-        return `<button onclick="PinAuth._del('${mode}')"
-          style="padding:14px;border:1px solid #e0e0e0;border-radius:10px;font-size:18px;font-weight:600;color:#5e716c;background:#f0f5f3;cursor:pointer">←</button>`;
-      }
-      return `<button onclick="PinAuth._input('${k}','${mode}')"
-        style="padding:14px;border:1px solid #e0e0e0;border-radius:10px;font-size:20px;font-weight:700;color:#1a3a30;background:#fff;cursor:pointer;transition:background .1s"
-        onmousedown="this.style.background='#e8f5e9'" onmouseup="this.style.background='#fff'">${k}</button>`;
-    }).join('');
-  },
-
-  // 점(●) 표시
-  _renderDots(id, filled, small=false){
-    const el = document.getElementById(id);
-    if(!el) return;
-    const size = small?'10px':'14px';
-    const gap  = small?'6px':'12px';
-    el.style.display='flex'; el.style.gap=gap;
-    el.innerHTML = Array.from({length:6},(_,i)=>`
-      <div style="width:${size};height:${size};border-radius:50%;
-        border:2px solid ${i<filled?'#0e5e54':'#ccc'};
-        background:${i<filled?'#0e5e54':'#fff'};
-        transition:all .15s"></div>`).join('');
-  },
-
-  // 숫자 입력
-  _input(digit, mode){
-    if(mode==='setup'){
-      if(this._step==='setup'){
-        if(this._setupPin.length>=6) return;
-        this._setupPin += digit;
-        this._renderDots('setup-dots', this._setupPin.length);
-        if(this._setupPin.length===6){
-          setTimeout(()=>{ this._step='confirm'; this._renderDots('setup-dots',6); },200);
-        }
-      } else {
-        if(this._confirmPin.length>=6) return;
-        this._confirmPin += digit;
-        this._renderDots('confirm-dots', this._confirmPin.length);
-        if(this._confirmPin.length===6){
-          setTimeout(()=>this._finishSetup(),200);
-        }
-      }
-    } else {
-      if(this._loginPin.length>=6) return;
-      this._loginPin += digit;
-      this._renderDots('pin-dots', this._loginPin.length);
-      if(this._loginPin.length===6){
-        setTimeout(()=>this._verifyPin(),200);
-      }
-    }
-  },
-
-  // 삭제
-  _del(mode){
-    if(mode==='setup'){
-      if(this._step==='setup'){
-        this._setupPin = this._setupPin.slice(0,-1);
-        this._renderDots('setup-dots', this._setupPin.length);
-      } else {
-        this._confirmPin = this._confirmPin.slice(0,-1);
-        this._renderDots('confirm-dots', this._confirmPin.length);
-      }
-    } else {
-      this._loginPin = this._loginPin.slice(0,-1);
-      this._renderDots('pin-dots', this._loginPin.length);
-    }
-  },
-
-  // PIN 설정 완료
-  async _finishSetup(){
-    const name = (document.getElementById('setup-name')?.value||'').trim();
-    const errEl = document.getElementById('setup-error');
-    if(!name){ errEl.textContent='이름을 입력해주세요'; errEl.style.display='block'; this._confirmPin=''; this._renderDots('confirm-dots',0); return; }
-    if(this._setupPin !== this._confirmPin){
-      errEl.textContent='PIN이 일치하지 않습니다. 다시 입력해주세요';
-      errEl.style.display='block';
-      this._setupPin=''; this._confirmPin=''; this._step='setup';
-      this._renderDots('setup-dots',0); this._renderDots('confirm-dots',0);
-      return;
-    }
-    // Supabase에서 직원 확인
-    const {data:hrList} = await supa.from('hr').select('id,name,rank,dept,status').eq('name',name);
-    if(!hrList||hrList.length===0){
-      errEl.textContent=`'${name}' 직원을 찾을 수 없습니다. 인사관리에 등록된 정확한 이름을 입력해주세요`;
-      errEl.style.display='block';
-      this._setupPin=''; this._confirmPin=''; this._step='setup';
-      this._renderDots('setup-dots',0); this._renderDots('confirm-dots',0);
-      return;
-    }
-    // profiles에서 역할 확인 — email로 매핑
-    const hr = hrList[0];
-    // profiles 테이블에서 이름으로 역할 찾기
-    const {data:profList} = await supa.from('staff_profiles').select('role,email').eq('name',name);
-    const role = profList?.[0]?.role || '일반직원';
-    const email = profList?.[0]?.email || '';
-    const localUser = { userId: hr.id, name: hr.name, role, email, rank:hr.rank, dept:hr.dept };
-
-    // PIN 저장
-    if(window.electronAPI?.isElectron){
-      await window.electronAPI.setPin({ userId:hr.id, name:hr.name, role, pin:this._setupPin });
-    } else {
-      // 웹: PIN 해시 저장
-      const pinHash = this._hashPin(this._setupPin, hr.id);
-      localStorage.setItem('ensign_local_user', JSON.stringify({...localUser, pinHash}));
-      localStorage.setItem('ensign_pin_fail', '0');
-    }
-    this._localUser = localUser;
-    this.showPinLogin();
-  },
-
-  // PIN 확인 및 로그인
-  async _verifyPin(){
-    const errEl = document.getElementById('pin-error');
-    errEl.style.display='none';
-    let result;
-    if(window.electronAPI?.isElectron){
-      result = await window.electronAPI.verifyPin({ pin: this._loginPin });
-    } else {
-      // 웹: localStorage PIN 확인
-      const stored = JSON.parse(localStorage.getItem('ensign_local_user')||'null');
-      const failCount = parseInt(localStorage.getItem('ensign_pin_fail')||'0');
-      if(failCount>=5){
-        const lockTime = parseInt(localStorage.getItem('ensign_pin_lock')||'0');
-        if(Date.now()-lockTime < 5*60*1000){
-          const remain = Math.ceil((5*60*1000-(Date.now()-lockTime))/60000);
-          result = {success:false, reason:`PIN 5회 오류. ${remain}분 후 다시 시도하세요.`};
-        } else {
-          localStorage.setItem('ensign_pin_fail','0');
-        }
-      }
-      if(!result){
-        const pinHash = this._hashPin(this._loginPin, stored?.userId||'');
-        if(stored && pinHash===stored.pinHash){
-          localStorage.setItem('ensign_pin_fail','0');
-          result = {success:true, user:stored};
-        } else {
-          const newFail = failCount+1;
-          localStorage.setItem('ensign_pin_fail', String(newFail));
-          if(newFail>=5) localStorage.setItem('ensign_pin_lock', String(Date.now()));
-          result = {success:false, reason:`PIN이 올바르지 않습니다. (${newFail}/5회)`};
-        }
-      }
-    }
-
-    if(result.success){
-      // Supabase 이메일 로그인으로 세션 생성
-      const email = this._localUser?.email || result.user?.email || '';
-      if(email){
-        // 세션이 없으면 백그라운드 로그인 시도
-        const {data:{session}} = await supa.auth.getSession();
-        if(!session){
-          // PIN 인증 성공 → Supabase 세션 없이도 진행 (프로필은 로컬 사용)
-        }
-      }
-      // 로컬 프로필로 바로 로그인 진행
-      const user = result.user || this._localUser;
-      await SupaAuth.onLoginWithProfile(user);
-    } else {
-      errEl.textContent = result.reason;
-      errEl.style.display='block';
-      this._loginPin='';
-      this._renderDots('pin-dots',0);
-      // 진동 효과
-      const dots = document.getElementById('pin-dots');
-      if(dots){ dots.style.transform='translateX(8px)'; setTimeout(()=>dots.style.transform='',100); }
-    }
-  },
-
-  cancelSetup(){ this.showPinLogin(); },
-  switchUser(){
-    if(window.electronAPI?.isElectron){
-      window.electronAPI.clearLocalUser();
-    } else {
-      localStorage.removeItem('ensign_local_user');
-      localStorage.setItem('ensign_pin_fail','0');
-    }
-    this._localUser=null;
-    this.showSetup();
-  },
-
-  _hashPin(pin, salt){
-    let h=0; const s=pin+salt+'ensign2024';
-    for(let i=0;i<s.length;i++){ h=((h<<5)-h)+s.charCodeAt(i); h=h&h; }
-    return Math.abs(h).toString(36)+s.length.toString(36);
-  }
-};
-
-/* SupaAuth에 PIN 전용 onLogin 추가 */
-SupaAuth.onLoginWithProfile = async function(localUser){
-  _supaUser = { id: localUser.userId, email: localUser.email };
-  _supaProfile = { id: localUser.userId, name: localUser.name, role: localUser.role };
-  SupaAuth.applyMenus();
-  SupaAuth.renderUser();
-  document.getElementById('login-screen').style.display='none';
-  document.getElementById('app-screen').style.display='flex';
-  document.body.style.overflow='hidden';
-  await supaLoadAll();
-  startRealtime();
-  route();
-};
-
-/* 로그아웃 시 PIN 화면으로 */
-const _origLogout2 = SupaAuth.logout.bind(SupaAuth);
-SupaAuth.logout = async function(){
-  if(!confirm('로그아웃 하시겠습니까?')) return;
-  stopRealtime();
-  await supa.auth.signOut();
-  _supaUser=null; _supaProfile=null;
-  document.getElementById('app-screen').style.display='none';
-  document.getElementById('login-screen').style.display='flex';
-  document.body.style.overflow='';
-  PinAuth.showPinLogin(); // PIN 화면으로
-};
-
-/* 세션 복원 및 초기화 */
-(async()=>{
-  try{
-    const {data:{session}} = await supa.auth.getSession();
-    if(session){
-      // 세션 있으면 프로필 로드 후 바로 진입
-      await SupaAuth.onLogin(session.user);
-    } else {
-      // 세션 없으면 PIN 로그인
-      await PinAuth.init();
-    }
-  } catch(e){
-    console.error('초기화 오류:', e);
-    await PinAuth.init();
-  }
-})();
-</script>
-<script>
-/* =====================================================
-   자동 업데이트 체크 시스템
-===================================================== */
-const Updater = {
-  async check(silent=false){
-    try{
-      const res = await fetch(UPDATE_URL + '?t=' + Date.now());
-      if(!res.ok) throw new Error('서버 응답 오류');
-      const info = await res.json();
-      const latest = info.version||'0.0.0';
-
-      if(Updater._isNewer(latest, APP_VERSION)){
-        Updater._showNotice(info);
-      } else {
-        if(!silent) toast(`최신 버전입니다 (v${APP_VERSION})`);
-      }
-    } catch(e){
-      if(!silent) toast('업데이트 서버에 연결할 수 없습니다');
-    }
-  },
-
-  _isNewer(latest, current){
-    const a = latest.split('.').map(Number);
-    const b = current.split('.').map(Number);
-    for(let i=0;i<3;i++){
-      if((a[i]||0)>(b[i]||0)) return true;
-      if((a[i]||0)<(b[i]||0)) return false;
-    }
-    return false;
-  },
-
-  _showNotice(info){
-    const changes = (info.changes||[]).map(c=>`<li style="margin-bottom:4px">${esc(c)}</li>`).join('');
-    const body =
-      `<div style="background:#e8f5e9;border-radius:8px;padding:12px 16px;margin-bottom:16px">
-        <div style="font-size:14px;font-weight:800;color:#1b5e20">🔄 새 버전 v${esc(info.version)} 이 있습니다</div>
-        <div style="font-size:12px;color:#388e3c;margin-top:2px">현재 버전: v${APP_VERSION}</div>
-      </div>
-      ${changes ? `<div style="font-size:13px;font-weight:700;margin-bottom:8px">변경사항:</div><ul style="font-size:13px;color:var(--ink2);padding-left:18px;margin:0 0 16px">${changes}</ul>` : ''}
-      <div style="font-size:12px;color:var(--ink3)">다운로드 후 기존 파일을 교체하시면 됩니다.</div>`;
-
-    UI.openModal('업데이트 알림', body, [
-      {label:'나중에', onClick:UI.closeModal},
-      {label:'⬇ 다운로드', cls:'pri', onClick:()=>{ Updater.download(); UI.closeModal(); }}
-    ]);
-  },
-
-  download(){
-    // Electron이면 electronAPI로, 아니면 링크 다운로드
-    if(window.electronAPI?.isElectron){
-      // Electron: 새 창에서 다운로드
-      const {shell} = require('electron');
-      shell.openExternal(DOWNLOAD_URL);
-    } else {
-      const a = document.createElement('a');
-      a.href = DOWNLOAD_URL;
-      a.download = 'ENsign_ERP_Setup.exe';
-      a.click();
-    }
-    toast('다운로드를 시작합니다...');
-  }
-};
-
-/* 설정/백업 화면에 업데이트 섹션 추가 */
-const _origSettings = Views.settings;
-Views.settings = function(){
-  _origSettings();
-  // 업데이트 카드 추가
-  const content = document.getElementById('content');
-  if(!content) return;
-  const updateCard = document.createElement('div');
-  updateCard.innerHTML = `
-    <div class="card" style="margin-top:14px">
-      <div class="hd"><h2>🔄 업데이트</h2></div>
-      <div class="bd">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <div>
-            <div style="font-size:13px;font-weight:700">현재 버전</div>
-            <div style="font-size:13px;color:var(--ink2)">v${APP_VERSION}</div>
-          </div>
-          <button class="btn pri" onclick="Updater.check(false)">업데이트 확인</button>
-        </div>
-        <div style="font-size:12px;color:var(--ink3)">
-          업데이트가 있으면 자동으로 알림이 표시됩니다.
-        </div>
-      </div>
-    </div>`;
-  content.appendChild(updateCard);
-};
-
-/* 로그인 후 자동 업데이트 체크 (30초 후) */
-const _origOnLogin3 = SupaAuth.onLogin.bind(SupaAuth);
-SupaAuth.onLogin = async function(user){
-  await _origOnLogin3(user);
-  setTimeout(()=>Updater.check(true), 30000);
 };
 </script>
