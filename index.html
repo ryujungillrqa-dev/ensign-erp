@@ -2084,7 +2084,45 @@ async function supaLoadAll(){
     State.hr=(results[4].data||[]).map(_conv.hrFrom);
     State.ediag=(results[5].data||[]).map(_conv.ediagFrom);
     State.auth=results[6].data?{roles:results[6].data.roles||{},users:results[6].data.users||{}}:{roles:{},users:{}};
+    // 팀 기반 필터링 적용
+    applyTeamFilter();
   }catch(e){console.error('로드 오류:',e);}
+}
+
+// 팀 기반 필터링 적용 역할
+const TEAM_FILTER_ROLES = ['진단팀장','일반직원','열람전용'];
+
+function applyTeamFilter(){
+  const role = _supaProfile?.role||'일반직원';
+  if(!TEAM_FILTER_ROLES.includes(role)) return; // 필터링 불필요
+
+  const myName = _supaProfile?.name||'';
+  if(!myName) return;
+
+  // 내가 팀장/팀원으로 등록된 ediag 찾기
+  const myEdiag = State.ediag.filter(function(d){
+    if(d.leader && d.leader.name===myName) return true;
+    if((d.members||[]).some(function(m){ return m.name===myName; })) return true;
+    return false;
+  });
+
+  // 허용된 계약 ID 목록
+  const allowedContractIds = myEdiag.map(function(d){ return d.contractId; });
+
+  // contracts 필터링
+  State.contracts = State.contracts.filter(function(c){
+    return allowedContractIds.includes(c.id);
+  });
+
+  // ediag 필터링
+  State.ediag = myEdiag;
+
+  // invoices 필터링
+  State.invoices = State.invoices.filter(function(v){
+    return allowedContractIds.includes(v.contractId);
+  });
+
+  console.log('팀 필터 적용:', myName, '→ 계약', allowedContractIds.length, '건');
 }
 
 State.saveAll=async function(){
