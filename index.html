@@ -150,7 +150,7 @@ table.dz td.num-ro{padding:6px 9px;text-align:right;font-variant-numeric:tabular
     <div style="text-align:center;margin-bottom:24px"><div style="font-size:26px;font-weight:900;color:#0e5e54">EN<span style="color:#4caf7d">sign</span> ERP</div><div style="font-size:13px;color:#7d918c;margin-top:4px">처음 사용 설정</div></div>
     <div id="setup-error" style="display:none;background:#fde8e8;color:#c0392b;padding:8px 12px;border-radius:7px;font-size:12px;margin-bottom:14px"></div>
     <div style="margin-bottom:12px"><label style="font-size:12px;color:#5e716c;font-weight:600;display:block;margin-bottom:5px">이름 (인사관리에 등록된 이름)</label><input id="setup-name" placeholder="홍길동" style="width:100%;border:1.5px solid #d1dbd9;border-radius:8px;padding:9px 12px;font-size:14px;box-sizing:border-box;outline:none" onfocus="this.style.borderColor='#0e5e54'" onblur="this.style.borderColor='#d1dbd9'"></div>
-    <div style="margin-bottom:6px"><label id="setup-pin-label" style="font-size:12px;color:#5e716c;font-weight:600;display:block;margin-bottom:6px">PIN 설정 (6자리)</label><div id="setup-dots" style="display:flex;gap:10px;justify-content:center;margin-bottom:8px"></div></div>
+    <div style="background:#fff3e0;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#e65100;line-height:1.6">⚠ <b>PIN은 설정 후 변경이 불가합니다.</b><br>반드시 기억하기 쉬우면서 타인이 유추하기 어려운 6자리를 설정해 주세요.</div>    <div style="margin-bottom:6px"><label id="setup-pin-label" style="font-size:12px;color:#5e716c;font-weight:600;display:block;margin-bottom:6px">PIN 설정 (6자리)</label><div id="setup-dots" style="display:flex;gap:10px;justify-content:center;margin-bottom:8px"></div></div>
     <div id="confirm-wrap" style="display:none;margin-bottom:14px"><div id="confirm-notice" style="background:#fff8e1;color:#f57f17;padding:8px 12px;border-radius:7px;font-size:12px;text-align:center;margin-bottom:8px;font-weight:600">🔒 PIN을 한 번 더 입력해주세요</div><div id="confirm-dots" style="display:flex;gap:10px;justify-content:center;margin-bottom:8px"></div></div>
     <div id="setup-keypad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px"></div>
     <button onclick="PinAuth.cancelSetup()" style="width:100%;background:#f0f5f3;border:1px solid #d1dbd9;border-radius:8px;padding:10px;font-size:13px;color:#5e716c;cursor:pointer">취소</button>
@@ -2033,8 +2033,8 @@ const SupaAuth = {
     const name=_supaProfile?.name||'';
     const role=_supaProfile?.role||'일반직원';
     const roleColor=role==='관리자'?'#5fc7b4':'#90b4e0';
-    el.innerHTML='<div style="color:#cfd9d6;font-weight:700;font-size:12.5px;margin-bottom:2px">'+esc(name)+'</div>'
-      +'<div style="color:'+roleColor+';font-size:11px;margin-bottom:8px">'+esc(role)+'</div>'
+    el.innerHTML='<div style="color:#cfd9d6;font-weight:700;font-size:12.5px;margin-bottom:1px">'+esc(name)+'</div>'
+      +'<div style="color:'+roleColor+';font-size:11px;margin-bottom:6px">'+esc(role)+'</div>'
       +'<button onclick="SupaAuth.logout()" style="width:100%;background:transparent;border:1px solid #3a4f4a;color:#7d918c;border-radius:6px;padding:5px;font-size:11px;cursor:pointer">로그아웃</button>';
   },
   async logout(){
@@ -2319,6 +2319,35 @@ const PinAuth={
       var dots=document.getElementById('pin-dots');if(dots){dots.style.transform='translateX(8px)';setTimeout(function(){dots.style.transform='';},100);}
       this._loginPin='';this._dots('pin-dots',0);
     }
+  },
+  changePin(){
+    var body='<div style="margin-bottom:14px">'
+      +'<div style="font-size:13px;color:var(--ink2);margin-bottom:14px">새 PIN 6자리를 설정합니다.</div>'
+      +'<div style="margin-bottom:10px"><label style="font-size:12px;font-weight:600;color:#5e716c;display:block;margin-bottom:5px">현재 PIN</label>'
+      +'<input id="cp-old" type="password" maxlength="6" placeholder="현재 PIN 6자리" style="width:100%;border:1.5px solid #d1dbd9;border-radius:8px;padding:9px 12px;font-size:14px;box-sizing:border-box;letter-spacing:4px;text-align:center"></div>'
+      +'<div style="margin-bottom:10px"><label style="font-size:12px;font-weight:600;color:#5e716c;display:block;margin-bottom:5px">새 PIN</label>'
+      +'<input id="cp-new" type="password" maxlength="6" placeholder="새 PIN 6자리" style="width:100%;border:1.5px solid #d1dbd9;border-radius:8px;padding:9px 12px;font-size:14px;box-sizing:border-box;letter-spacing:4px;text-align:center"></div>'
+      +'<div><label style="font-size:12px;font-weight:600;color:#5e716c;display:block;margin-bottom:5px">새 PIN 확인</label>'
+      +'<input id="cp-new2" type="password" maxlength="6" placeholder="새 PIN 다시 입력" style="width:100%;border:1.5px solid #d1dbd9;border-radius:8px;padding:9px 12px;font-size:14px;box-sizing:border-box;letter-spacing:4px;text-align:center"></div>'
+      +'</div>';
+    UI.openModal('🔑 PIN 변경', body, [
+      {label:'취소', onClick:UI.closeModal},
+      {label:'변경', cls:'pri', onClick:function(){
+        var oldPin=(document.getElementById('cp-old')?.value||'').trim();
+        var newPin=(document.getElementById('cp-new')?.value||'').trim();
+        var newPin2=(document.getElementById('cp-new2')?.value||'').trim();
+        if(oldPin.length!==6||newPin.length!==6){toast('PIN은 6자리여야 합니다');return;}
+        if(newPin!==newPin2){toast('새 PIN이 일치하지 않습니다');return;}
+        var stored=JSON.parse(localStorage.getItem('ensign_local_user')||'null');
+        if(!stored){toast('로그인 정보가 없습니다');return;}
+        var oldHash=PinAuth._hash(oldPin, stored.userId||'');
+        if(oldHash!==stored.pinHash){toast('현재 PIN이 올바르지 않습니다');return;}
+        stored.pinHash=PinAuth._hash(newPin, stored.userId||'');
+        localStorage.setItem('ensign_local_user', JSON.stringify(stored));
+        UI.closeModal();
+        toast('✅ PIN이 변경되었습니다');
+      }}
+    ]);
   },
   cancelSetup(){this.showPinLogin();},
   switchUser(){localStorage.removeItem('ensign_local_user');localStorage.setItem('ensign_pin_fail','0');this._localUser=null;this.showSetup();},
