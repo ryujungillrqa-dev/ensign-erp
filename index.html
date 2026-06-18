@@ -3312,11 +3312,11 @@ const SupaAuth = {
   async onLogin(user){
     _supaUser = user;
     // 프로필 로드 (없으면 관리자로 생성)
-    const {data:prof} = await supa.from('profiles').select('*').eq('id',user.id).single();
+    const {data:prof} = await supa.from('staff_profiles').select('*').eq('id',user.id).maybeSingle();
     if(prof){
       _supaProfile = prof;
     } else {
-      const {data:newProf} = await supa.from('profiles')
+      const {data:newProf} = await supa.from('staff_profiles')
         .upsert({id:user.id, email:user.email, name:user.email.split('@')[0], role:'관리자'})
         .select().single();
       _supaProfile = newProf;
@@ -3814,7 +3814,7 @@ const PinAuth = {
     // profiles에서 역할 확인 — email로 매핑
     const hr = hrList[0];
     // profiles 테이블에서 이름으로 역할 찾기
-    const {data:profList} = await supa.from('profiles').select('role,email').eq('name',name);
+    const {data:profList} = await supa.from('staff_profiles').select('role,email').eq('name',name);
     const role = profList?.[0]?.role || '일반직원';
     const email = profList?.[0]?.email || '';
     const localUser = { userId: hr.id, name: hr.name, role, email, rank:hr.rank, dept:hr.dept };
