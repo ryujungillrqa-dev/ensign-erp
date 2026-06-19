@@ -150,8 +150,8 @@ table.dz td.num-ro{padding:6px 9px;text-align:right;font-variant-numeric:tabular
     <div style="text-align:center;margin-bottom:24px"><div style="font-size:26px;font-weight:900;color:#0e5e54">EN<span style="color:#4caf7d">sign</span> ERP</div><div style="font-size:13px;color:#7d918c;margin-top:4px">처음 사용 설정</div></div>
     <div id="setup-error" style="display:none;background:#fde8e8;color:#c0392b;padding:8px 12px;border-radius:7px;font-size:12px;margin-bottom:14px"></div>
     <div style="margin-bottom:12px"><label style="font-size:12px;color:#5e716c;font-weight:600;display:block;margin-bottom:5px">이름 (인사관리에 등록된 이름)</label><input id="setup-name" placeholder="홍길동" style="width:100%;border:1.5px solid #d1dbd9;border-radius:8px;padding:9px 12px;font-size:14px;box-sizing:border-box;outline:none" onfocus="this.style.borderColor='#0e5e54'" onblur="this.style.borderColor='#d1dbd9'"></div>
-    <div style="margin-bottom:6px"><label style="font-size:12px;color:#5e716c;font-weight:600;display:block;margin-bottom:6px">PIN 설정 (6자리)</label><div id="setup-dots" style="display:flex;gap:10px;justify-content:center;margin-bottom:8px"></div></div>
-    <div style="margin-bottom:14px"><label style="font-size:12px;color:#5e716c;font-weight:600;display:block;margin-bottom:6px">PIN 확인</label><div id="confirm-dots" style="display:flex;gap:10px;justify-content:center;margin-bottom:8px"></div></div>
+    <div style="background:#fff3e0;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#e65100;line-height:1.6">⚠ <b>PIN은 설정 후 변경이 불가합니다.</b><br>반드시 기억하기 쉬우면서 타인이 유추하기 어려운 6자리를 설정해 주세요.</div>    <div style="margin-bottom:6px"><label id="setup-pin-label" style="font-size:12px;color:#5e716c;font-weight:600;display:block;margin-bottom:6px">PIN 설정 (6자리)</label><div id="setup-dots" style="display:flex;gap:10px;justify-content:center;margin-bottom:8px"></div></div>
+    <div id="confirm-wrap" style="display:none;margin-bottom:14px"><div id="confirm-notice" style="background:#fff8e1;color:#f57f17;padding:8px 12px;border-radius:7px;font-size:12px;text-align:center;margin-bottom:8px;font-weight:600">🔒 PIN을 한 번 더 입력해주세요</div><div id="confirm-dots" style="display:flex;gap:10px;justify-content:center;margin-bottom:8px"></div></div>
     <div id="setup-keypad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px"></div>
     <button onclick="PinAuth.cancelSetup()" style="width:100%;background:#f0f5f3;border:1px solid #d1dbd9;border-radius:8px;padding:10px;font-size:13px;color:#5e716c;cursor:pointer">취소</button>
   </div>
@@ -159,8 +159,9 @@ table.dz td.num-ro{padding:6px 9px;text-align:right;font-variant-numeric:tabular
     <div style="text-align:center;margin-bottom:20px"><div style="font-size:26px;font-weight:900;color:#0e5e54">EN<span style="color:#4caf7d">sign</span> ERP</div><div id="pin-greeting" style="font-size:15px;color:#2e7d52;font-weight:700;margin-top:8px"></div><div style="font-size:12px;color:#7d918c;margin-top:2px">PIN 6자리를 입력하세요</div></div>
     <div id="pin-error" style="display:none;background:#fde8e8;color:#c0392b;padding:8px 12px;border-radius:7px;font-size:12px;margin-bottom:12px;text-align:center"></div>
     <div style="display:flex;gap:12px;justify-content:center;margin-bottom:24px"><div id="pin-dots" style="display:flex;gap:12px"></div></div>
-    <div id="login-keypad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px"></div>
-    <button onclick="PinAuth.switchUser()" style="width:100%;background:#f0f5f3;border:1px solid #d1dbd9;border-radius:8px;padding:10px;font-size:12px;color:#7d918c;cursor:pointer">다른 계정으로 로그인</button>
+    <div id="login-keypad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px"></div>
+    <button onclick="PinAuth.switchUser()" style="width:100%;background:#f0f5f3;border:1px solid #d1dbd9;border-radius:8px;padding:8px;font-size:12px;color:#7d918c;cursor:pointer;margin-bottom:8px">다른 계정으로 로그인</button>
+    <div style="text-align:right;margin-top:4px"><button onclick="PinAuth.showEmailLogin()" style="background:none;border:none;font-size:11px;color:#b0bbb8;cursor:pointer;text-decoration:underline">관리자 로그인</button></div>
   </div>
   <div id="email-login" style="display:none;background:#fff;border-radius:16px;padding:36px 40px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
     <div style="text-align:center;margin-bottom:24px"><div style="font-size:26px;font-weight:900;color:#0e5e54">EN<span style="color:#4caf7d">sign</span> ERP</div><div style="font-size:12px;color:#7d918c;margin-top:4px">관리자 로그인</div></div>
@@ -231,9 +232,8 @@ const ROLE_MENUS = {
   '관리자':    ['contracts','ediagmail','ediag','invoices','dash','hr','auth','bank','match','savings','settings'],
   '부관리자':  ['contracts','ediagmail','ediag','invoices','dash','hr','auth','settings'],
   '계약담당':  ['contracts','ediagmail','ediag','invoices','dash'],
-  '에너지진단':['contracts','ediagmail','ediag'],
   '진단팀장':  ['contracts','ediagmail','ediag','invoices'],
-  '자금담당':  ['bank','match','savings','dash'],
+  '자금담당':  ['contracts','ediagmail','ediag','invoices','hr'],
   '일반직원':  ['contracts','ediagmail','ediag','invoices'],
 };
 
@@ -1173,11 +1173,25 @@ const Invoices = {
       v.paidDate = '';
       if(pdEl) pdEl.value = '';
     }
-    // 입금 상태는 즉시 State에 저장 (백업/복원 시 유실 방지)
-    State.saveAll();
+    // 입금 상태는 즉시 Supabase에 저장 (순차 처리로 경쟁상태 방지)
+    Invoices._queueSave();
   },
 
-  saveAll(contractId){
+  // 저장 요청을 순차적으로 처리 (동시 다발 클릭 시 경쟁상태 방지)
+  _saveQueue: Promise.resolve(),
+  _queueSave(){
+    Invoices._saveQueue = Invoices._saveQueue.then(async function(){
+      try{
+        await State.saveAll();
+        toast('✅ 저장됨');
+      }catch(e){
+        toast('❌ 저장 실패: '+e.message);
+      }
+    });
+    return Invoices._saveQueue;
+  },
+
+  async saveAll(contractId){
     const c   = contractById(contractId);
     const invs = contractInvoices(contractId);
     // 현재 DOM 값 → State 반영 (input에 타이핑 중인 값 포함)
@@ -1205,9 +1219,15 @@ const Invoices = {
         : `⚠ 발행 합계(${fmt.money(issuedSum)}원)가 계약금액(${fmt.money(ctotal)}원)보다\n${fmt.money(Math.abs(diff))}원 부족합니다. 저장할까요?`;
       if(!confirm(msg)) return;
     }
-    State.saveAll();
+    toast('저장 중...');
+    try{
+      await State.saveAll();
+      toast('✅ ['+c?.no+'] 저장 완료');
+    }catch(e){
+      toast('❌ 저장 실패: '+e.message);
+      return;
+    }
     _renderInvoices();
-    toast('['+c?.no+'] 저장 완료');
   },
 
   cancelAll(contractId){
@@ -2006,17 +2026,32 @@ const SupaAuth = {
     document.getElementById('app-screen').style.display='flex';
     await supaLoadAll();startRealtime();route();
   },
-  onLoginWithProfile(localUser){
-    _supaUser={id:localUser.userId,email:localUser.email};
+  async onLoginWithProfile(localUser){
+    _supaUser={id:localUser.userId,email:localUser.email||''};
     _supaProfile={name:localUser.name,role:localUser.role};
     SupaAuth.applyMenus();SupaAuth.renderUser();
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app-screen').style.display='flex';
-    supaLoadAll().then(function(){startRealtime();route();});
+    await supaLoadAll();
+    startRealtime();
+    route();
   },
   applyMenus(){
-    const role=_supaProfile?.role||'일반직원';
-    const allowed=ROLE_MENUS[role]||ROLE_MENUS['일반직원'];
+    const role = _supaProfile?.role||'일반직원';
+    // 관리자는 항상 전체 메뉴
+    let allowed;
+    if(role==='관리자'){
+      allowed = AUTH_MENUS.map(m=>m.key);
+    } else {
+      const perms = (State.auth.roles[role]||{}).perms || {};
+      // perms에 등록 안 된 역할은 ROLE_MENUS 기본값 사용 (하위호환)
+      const hasMatrix = Object.keys(perms).length>0;
+      if(hasMatrix){
+        allowed = AUTH_MENUS.filter(m=>(perms[m.key]||'none')!=='none').map(m=>m.key);
+      } else {
+        allowed = ROLE_MENUS[role]||ROLE_MENUS['일반직원'];
+      }
+    }
     document.querySelectorAll('#nav a[data-v]').forEach(function(a){
       a.style.display=allowed.includes(a.getAttribute('data-v'))?'':'none';
     });
@@ -2030,8 +2065,8 @@ const SupaAuth = {
     const name=_supaProfile?.name||'';
     const role=_supaProfile?.role||'일반직원';
     const roleColor=role==='관리자'?'#5fc7b4':'#90b4e0';
-    el.innerHTML='<div style="color:#cfd9d6;font-weight:700;font-size:12.5px;margin-bottom:2px">'+esc(name)+'</div>'
-      +'<div style="color:'+roleColor+';font-size:11px;margin-bottom:8px">'+esc(role)+'</div>'
+    el.innerHTML='<div style="color:#cfd9d6;font-weight:700;font-size:12.5px;margin-bottom:1px">'+esc(name)+'</div>'
+      +'<div style="color:'+roleColor+';font-size:11px;margin-bottom:6px">'+esc(role)+'</div>'
       +'<button onclick="SupaAuth.logout()" style="width:100%;background:transparent;border:1px solid #3a4f4a;color:#7d918c;border-radius:6px;padding:5px;font-size:11px;cursor:pointer">로그아웃</button>';
   },
   async logout(){
@@ -2081,22 +2116,81 @@ async function supaLoadAll(){
     State.hr=(results[4].data||[]).map(_conv.hrFrom);
     State.ediag=(results[5].data||[]).map(_conv.ediagFrom);
     State.auth=results[6].data?{roles:results[6].data.roles||{},users:results[6].data.users||{}}:{roles:{},users:{}};
+    // 팀 기반 필터링 적용
+    applyTeamFilter();
   }catch(e){console.error('로드 오류:',e);}
 }
 
+// 팀 기반 필터링 적용 역할
+const TEAM_FILTER_ROLES = ['진단팀장','일반직원','열람전용'];
+
+function applyTeamFilter(){
+  const role = _supaProfile?.role||'일반직원';
+  if(!TEAM_FILTER_ROLES.includes(role)) return; // 필터링 불필요
+
+  const myName = _supaProfile?.name||'';
+  if(!myName) return;
+
+  // 내가 팀장/팀원으로 등록된 ediag 찾기
+  const myEdiag = State.ediag.filter(function(d){
+    if(d.leader && d.leader.name===myName) return true;
+    if((d.members||[]).some(function(m){ return m.name===myName; })) return true;
+    return false;
+  });
+
+  // 허용된 계약 ID 목록
+  const allowedContractIds = myEdiag.map(function(d){ return d.contractId; });
+
+  // contracts 필터링
+  State.contracts = State.contracts.filter(function(c){
+    return allowedContractIds.includes(c.id);
+  });
+
+  // ediag 필터링
+  State.ediag = myEdiag;
+
+  // invoices 필터링
+  State.invoices = State.invoices.filter(function(v){
+    return allowedContractIds.includes(v.contractId);
+  });
+
+  console.log('팀 필터 적용:', myName, '→ 계약', allowedContractIds.length, '건');
+}
+
 State.saveAll=async function(){
-  if(!_supaUser)return;
+  if(!_supaUser){
+    console.warn('저장 안됨: 로그인 세션 없음(_supaUser=null)');
+    throw new Error('로그인 세션이 없습니다. 다시 로그인해주세요.');
+  }
+  _isSaving=true;
   try{
+    var role = _supaProfile?.role||'일반직원';
+    var isFiltered = TEAM_FILTER_ROLES.includes(role);
     var jobs=[];
-    if(State.contracts.length) jobs.push(supa.from('contracts').upsert(State.contracts.map(_conv.ctTo)));
-    if(State.invoices.length)  jobs.push(supa.from('invoices').upsert(State.invoices.map(_conv.invTo)));
-    if(State.bank.length)      jobs.push(supa.from('bank').upsert(State.bank.map(_conv.bankTo)));
-    if(State.savings.length)   jobs.push(supa.from('savings').upsert(State.savings.map(_conv.savTo)));
-    if(State.hr.length)        jobs.push(supa.from('hr').upsert(State.hr.map(_conv.hrTo)));
-    if(State.ediag.length)     jobs.push(supa.from('ediag').upsert(State.ediag.map(_conv.ediagTo)));
-    jobs.push(supa.from('auth_settings').upsert({id:1,roles:State.auth.roles||{},users:State.auth.users||{}}));
-    await Promise.all(jobs);
-  }catch(e){console.error('저장 오류:',e);toast('저장 오류: '+e.message);}
+    var labels=[];
+    if(State.contracts.length){ jobs.push(supa.from('contracts').upsert(State.contracts.map(_conv.ctTo))); labels.push('contracts'); }
+    if(State.invoices.length){  jobs.push(supa.from('invoices').upsert(State.invoices.map(_conv.invTo)));  labels.push('invoices'); }
+    if(State.ediag.length){     jobs.push(supa.from('ediag').upsert(State.ediag.map(_conv.ediagTo)));      labels.push('ediag'); }
+    if(!isFiltered){
+      if(State.bank.length){    jobs.push(supa.from('bank').upsert(State.bank.map(_conv.bankTo)));         labels.push('bank'); }
+      if(State.savings.length){ jobs.push(supa.from('savings').upsert(State.savings.map(_conv.savTo)));    labels.push('savings'); }
+      if(State.hr.length){      jobs.push(supa.from('hr').upsert(State.hr.map(_conv.hrTo)));               labels.push('hr'); }
+      jobs.push(supa.from('auth_settings').upsert({id:1,roles:State.auth.roles||{},users:State.auth.users||{}})); labels.push('auth_settings');
+    }
+    var results = await Promise.all(jobs);
+    // Supabase는 에러를 throw하지 않고 {error} 객체로 반환하므로 직접 검사 필요
+    var errors=[];
+    results.forEach(function(r,i){
+      if(r && r.error){ errors.push(labels[i]+': '+r.error.message); console.error('저장 오류 ['+labels[i]+']', r.error); }
+    });
+    if(errors.length){
+      throw new Error(errors.join(' / '));
+    }
+  }catch(e){
+    console.error('저장 오류:',e);
+    throw e; // 호출한 쪽에서 catch해서 토스트로 표시하도록 재전파
+  }
+  finally{ setTimeout(function(){_isSaving=false;},500); }
 };
 
 async function migrateToSupabase(){
@@ -2134,6 +2228,7 @@ async function migrateToSupabase(){
 
 /* ===== 실시간 동기화 ===== */
 var _realtimeChannel=null;
+var _isSaving=false;
 function startRealtime(){
   if(_realtimeChannel)return;
   _realtimeChannel=supa.channel('erp-sync')
@@ -2152,7 +2247,9 @@ function startRealtime(){
 }
 function stopRealtime(){if(_realtimeChannel){supa.removeChannel(_realtimeChannel);_realtimeChannel=null;}}
 function _syncAndRender(supaTable,stateKey,fromFn){
+  if(_isSaving) return; // 저장 중이면 실시간 갱신 무시 (충돌 방지)
   supa.from(supaTable).select('*').then(function(res){
+    if(_isSaving) return; // 저장 완료 후 도착한 응답도 무시
     if(res.data) State[stateKey]=(res.data).map(fromFn);
     clearTimeout(window._rerenderTimer);
     window._rerenderTimer=setTimeout(function(){var h=location.hash.replace('#','')||'contracts';try{if(Views[h])Views[h]();}catch(e){}},300);
@@ -2174,6 +2271,8 @@ const PinAuth={
     this._renderKeypad('setup-keypad','setup');
     this._dots('setup-dots',0);this._dots('confirm-dots',0);
     document.getElementById('setup-error').style.display='none';
+    var cw=document.getElementById('confirm-wrap');if(cw)cw.style.display='none';
+    var pl=document.getElementById('setup-pin-label');if(pl){pl.textContent='PIN 설정 (6자리)';pl.style.color='#5e716c';}
     setTimeout(function(){var n=document.getElementById('setup-name');if(n)n.focus();},100);
   },
   showPinLogin(){
@@ -2202,7 +2301,7 @@ const PinAuth={
     keys.forEach(function(k){
       var btn=document.createElement('button');
       btn.style.cssText='padding:14px;border:1px solid #e0e0e0;border-radius:10px;cursor:pointer;';
-      if(k==='관리자'){btn.textContent='관리자';btn.style.cssText+='font-size:11px;font-weight:600;color:#aab5b3;background:#f9f9f9';btn.onclick=function(){PinAuth.showEmailLogin();};}
+      if(k==='관리자'){btn.style.display='none';}
       else if(k==='←'){btn.textContent='←';btn.style.cssText+='font-size:18px;color:#5e716c;background:#f0f5f3';btn.onclick=function(){PinAuth._del(mode);};}
       else{btn.textContent=k;btn.style.cssText+='font-size:20px;font-weight:700;color:#1a3a30;background:#fff';(function(d){btn.onclick=function(){PinAuth._input(d,mode);};})(k);}
       el.appendChild(btn);
@@ -2214,7 +2313,7 @@ const PinAuth={
       if(this._step==='setup'){
         if(this._setupPin.length>=6)return;
         this._setupPin+=digit;this._dots('setup-dots',this._setupPin.length);
-        if(this._setupPin.length===6) setTimeout(function(){self._step='confirm';},200);
+        if(this._setupPin.length===6) setTimeout(function(){self._step='confirm';document.getElementById('confirm-wrap').style.display='block';document.getElementById('setup-pin-label').textContent='PIN 설정 완료 ✓';document.getElementById('setup-pin-label').style.color='#2e7d32';},200);
       } else {
         if(this._confirmPin.length>=6)return;
         this._confirmPin+=digit;this._dots('confirm-dots',this._confirmPin.length);
@@ -2276,6 +2375,35 @@ const PinAuth={
       var dots=document.getElementById('pin-dots');if(dots){dots.style.transform='translateX(8px)';setTimeout(function(){dots.style.transform='';},100);}
       this._loginPin='';this._dots('pin-dots',0);
     }
+  },
+  changePin(){
+    var body='<div style="margin-bottom:14px">'
+      +'<div style="font-size:13px;color:var(--ink2);margin-bottom:14px">새 PIN 6자리를 설정합니다.</div>'
+      +'<div style="margin-bottom:10px"><label style="font-size:12px;font-weight:600;color:#5e716c;display:block;margin-bottom:5px">현재 PIN</label>'
+      +'<input id="cp-old" type="password" maxlength="6" placeholder="현재 PIN 6자리" style="width:100%;border:1.5px solid #d1dbd9;border-radius:8px;padding:9px 12px;font-size:14px;box-sizing:border-box;letter-spacing:4px;text-align:center"></div>'
+      +'<div style="margin-bottom:10px"><label style="font-size:12px;font-weight:600;color:#5e716c;display:block;margin-bottom:5px">새 PIN</label>'
+      +'<input id="cp-new" type="password" maxlength="6" placeholder="새 PIN 6자리" style="width:100%;border:1.5px solid #d1dbd9;border-radius:8px;padding:9px 12px;font-size:14px;box-sizing:border-box;letter-spacing:4px;text-align:center"></div>'
+      +'<div><label style="font-size:12px;font-weight:600;color:#5e716c;display:block;margin-bottom:5px">새 PIN 확인</label>'
+      +'<input id="cp-new2" type="password" maxlength="6" placeholder="새 PIN 다시 입력" style="width:100%;border:1.5px solid #d1dbd9;border-radius:8px;padding:9px 12px;font-size:14px;box-sizing:border-box;letter-spacing:4px;text-align:center"></div>'
+      +'</div>';
+    UI.openModal('🔑 PIN 변경', body, [
+      {label:'취소', onClick:UI.closeModal},
+      {label:'변경', cls:'pri', onClick:function(){
+        var oldPin=(document.getElementById('cp-old')?.value||'').trim();
+        var newPin=(document.getElementById('cp-new')?.value||'').trim();
+        var newPin2=(document.getElementById('cp-new2')?.value||'').trim();
+        if(oldPin.length!==6||newPin.length!==6){toast('PIN은 6자리여야 합니다');return;}
+        if(newPin!==newPin2){toast('새 PIN이 일치하지 않습니다');return;}
+        var stored=JSON.parse(localStorage.getItem('ensign_local_user')||'null');
+        if(!stored){toast('로그인 정보가 없습니다');return;}
+        var oldHash=PinAuth._hash(oldPin, stored.userId||'');
+        if(oldHash!==stored.pinHash){toast('현재 PIN이 올바르지 않습니다');return;}
+        stored.pinHash=PinAuth._hash(newPin, stored.userId||'');
+        localStorage.setItem('ensign_local_user', JSON.stringify(stored));
+        UI.closeModal();
+        toast('✅ PIN이 변경되었습니다');
+      }}
+    ]);
   },
   cancelSetup(){this.showPinLogin();},
   switchUser(){localStorage.removeItem('ensign_local_user');localStorage.setItem('ensign_pin_fail','0');this._localUser=null;this.showSetup();},
