@@ -1173,11 +1173,25 @@ const Invoices = {
       v.paidDate = '';
       if(pdEl) pdEl.value = '';
     }
-    // 입금 상태는 즉시 State에 저장 (백업/복원 시 유실 방지)
-    State.saveAll();
+    // 입금 상태는 즉시 Supabase에 저장 (순차 처리로 경쟁상태 방지)
+    Invoices._queueSave();
   },
 
-  saveAll(contractId){
+  // 저장 요청을 순차적으로 처리 (동시 다발 클릭 시 경쟁상태 방지)
+  _saveQueue: Promise.resolve(),
+  _queueSave(){
+    Invoices._saveQueue = Invoices._saveQueue.then(async function(){
+      try{
+        await State.saveAll();
+        toast('✅ 저장됨');
+      }catch(e){
+        toast('❌ 저장 실패: '+e.message);
+      }
+    });
+    return Invoices._saveQueue;
+  },
+
+  async saveAll(contractId){
     const c   = contractById(contractId);
     const invs = contractInvoices(contractId);
     // 현재 DOM 값 → State 반영 (input에 타이핑 중인 값 포함)
@@ -1205,9 +1219,15 @@ const Invoices = {
         : `⚠ 발행 합계(${fmt.money(issuedSum)}원)가 계약금액(${fmt.money(ctotal)}원)보다\n${fmt.money(Math.abs(diff))}원 부족합니다. 저장할까요?`;
       if(!confirm(msg)) return;
     }
-    State.saveAll();
+    toast('저장 중...');
+    try{
+      await State.saveAll();
+      toast('✅ ['+c?.no+'] 저장 완료');
+    }catch(e){
+      toast('❌ 저장 실패: '+e.message);
+      return;
+    }
     _renderInvoices();
-    toast('['+c?.no+'] 저장 완료');
   },
 
   cancelAll(contractId){
@@ -2139,17 +2159,25 @@ function applyTeamFilter(){
 
 State.saveAll=async function(){
   if(!_supaUser)return;
+  _isSaving=true;
   try{
+    var role = _supaProfile?.role||'일반직원';
+    var isFiltered = TEAM_FILTER_ROLES.includes(role); // 팀 필터링 적용 대상 여부
     var jobs=[];
+    // 필터링 대상 사용자는 contracts/invoices/ediag를 upsert만 (개수가 줄어도 기존 row는 삭제되지 않음 — upsert는 안전)
     if(State.contracts.length) jobs.push(supa.from('contracts').upsert(State.contracts.map(_conv.ctTo)));
     if(State.invoices.length)  jobs.push(supa.from('invoices').upsert(State.invoices.map(_conv.invTo)));
-    if(State.bank.length)      jobs.push(supa.from('bank').upsert(State.bank.map(_conv.bankTo)));
-    if(State.savings.length)   jobs.push(supa.from('savings').upsert(State.savings.map(_conv.savTo)));
-    if(State.hr.length)        jobs.push(supa.from('hr').upsert(State.hr.map(_conv.hrTo)));
     if(State.ediag.length)     jobs.push(supa.from('ediag').upsert(State.ediag.map(_conv.ediagTo)));
-    jobs.push(supa.from('auth_settings').upsert({id:1,roles:State.auth.roles||{},users:State.auth.users||{}}));
+    // 필터링 대상 사용자는 본인 권한 밖 데이터(bank/savings/hr)는 건드리지 않음
+    if(!isFiltered){
+      if(State.bank.length)    jobs.push(supa.from('bank').upsert(State.bank.map(_conv.bankTo)));
+      if(State.savings.length) jobs.push(supa.from('savings').upsert(State.savings.map(_conv.savTo)));
+      if(State.hr.length)      jobs.push(supa.from('hr').upsert(State.hr.map(_conv.hrTo)));
+      jobs.push(supa.from('auth_settings').upsert({id:1,roles:State.auth.roles||{},users:State.auth.users||{}}));
+    }
     await Promise.all(jobs);
   }catch(e){console.error('저장 오류:',e);toast('저장 오류: '+e.message);}
+  finally{ setTimeout(function(){_isSaving=false;},500); }
 };
 
 async function migrateToSupabase(){
@@ -2187,6 +2215,7 @@ async function migrateToSupabase(){
 
 /* ===== 실시간 동기화 ===== */
 var _realtimeChannel=null;
+var _isSaving=false;
 function startRealtime(){
   if(_realtimeChannel)return;
   _realtimeChannel=supa.channel('erp-sync')
@@ -2205,7 +2234,9 @@ function startRealtime(){
 }
 function stopRealtime(){if(_realtimeChannel){supa.removeChannel(_realtimeChannel);_realtimeChannel=null;}}
 function _syncAndRender(supaTable,stateKey,fromFn){
+  if(_isSaving) return; // 저장 중이면 실시간 갱신 무시 (충돌 방지)
   supa.from(supaTable).select('*').then(function(res){
+    if(_isSaving) return; // 저장 완료 후 도착한 응답도 무시
     if(res.data) State[stateKey]=(res.data).map(fromFn);
     clearTimeout(window._rerenderTimer);
     window._rerenderTimer=setTimeout(function(){var h=location.hash.replace('#','')||'contracts';try{if(Views[h])Views[h]();}catch(e){}},300);
