@@ -999,11 +999,15 @@ const Contracts = {
 /* =====================================================
    3) 세금계산서 — 더존식 그리드 (계약당 4행)
 ===================================================== */
-let invFilter    = { q:'', year:'', typeCode:'', onlyUnpaid:false, issueYear:'' };
+let invFilter    = { q:'', year:'', typeCode:'', onlyUnpaid:false };
 
 function _invHtml(){
   const cts = State.contracts.filter(c=>{
-    if(invFilter.year     && c.year     !== invFilter.year)     return false;
+    if(invFilter.year){
+      // 발행년도 필터: 해당 연도에 발행된 세금계산서가 있는 계약만 표시
+      const hasIssueInYear = State.invoices.some(v=>v.contractId===c.id && v.issueDate && v.issueDate.slice(0,4)===invFilter.year);
+      if(!hasIssueInYear) return false;
+    }
     if(invFilter.typeCode && c.typeCode !== invFilter.typeCode) return false;
     if(invFilter.q){
       const q = invFilter.q.toLowerCase();
@@ -1016,8 +1020,8 @@ function _invHtml(){
     const invs = INV_KINDS.map(k=>contractInvoices(c.id).find(v=>v.kind===k)).filter(Boolean);
     if(invFilter.onlyUnpaid && !invs.some(v=>v.issueDate && !v.paid)) return;
     const ctotal=(Number(c.supply)||0)+(Number(c.vat)||0);
-    // 총 발행금액 합계는 '세금계산서 발행일' 기준 연도로 집계 (대상년도 필터와 별개)
-    const issuedInvs = invs.filter(v=>v.issueDate && (!invFilter.issueYear || v.issueDate.slice(0,4)===invFilter.issueYear));
+    // 총 발행금액 합계: '세금계산서 발행일' 기준 연도로 집계 (연도 미선택 시 전체발행분 = 발행일이 있는 모든 건)
+    const issuedInvs = invs.filter(v=>v.issueDate && (!invFilter.year || v.issueDate.slice(0,4)===invFilter.year));
     const issuedSum = issuedInvs.reduce((s,v)=>s+invoiceTotal(v),0);
     const paidSum   = issuedInvs.filter(v=>v.paid).reduce((s,v)=>s+invoiceTotal(v),0);
     grandIssued+=issuedSum; grandUnpaid+=issuedSum-paidSum;
@@ -1062,22 +1066,17 @@ function _renderInvoices(){
   const wrap = document.getElementById('inv-list');
   const sm   = document.getElementById('inv-summary');
   if(wrap) wrap.innerHTML = html;
-  const yearLabel = invFilter.issueYear ? invFilter.issueYear+'년 발행분 ' : '';
+  const yearLabel = invFilter.year ? invFilter.year+'년 발행분 ' : '';
   if(sm)   sm.innerHTML   = `${yearLabel}총발행 <b>${fmt.num(grandIssued)}</b>원 · 총미수 <b style="color:var(--red)">${fmt.num(grandUnpaid)}</b>원`;
 }
 Views.invoices = function(){
-  const years = [...new Set(State.contracts.map(c=>c.year))].sort().reverse();
   const {html, grandIssued, grandUnpaid} = _invHtml();
   document.getElementById('content').innerHTML = `
     <div class="toolbar sticky-toolbar">
       <input type="search" id="inv-search" placeholder="계약번호·계약명·업체명 검색" value="${esc(invFilter.q)}" oninput="searchInput(event,'inv')" style="width:200px">
-      <select onchange="invFilter.year=this.value;_renderInvoices()">
-        <option value="">대상년도 전체</option>
-        ${years.map(y=>`<option ${invFilter.year===y?'selected':''}>${y}</option>`).join('')}
-      </select>
-      <select onchange="invFilter.issueYear=this.value;_renderInvoices()" title="세금계산서 발행일 기준 연도로 합계 집계">
-        <option value="">발행년도 전체(합계기준)</option>
-        ${[...new Set(State.invoices.filter(v=>v.issueDate).map(v=>v.issueDate.slice(0,4)))].sort().reverse().map(y=>`<option value="${y}" ${invFilter.issueYear===y?'selected':''}>${y}년 발행분</option>`).join('')}
+      <select onchange="invFilter.year=this.value;_renderInvoices()" title="세금계산서 발행일 기준 연도로 필터링 및 합계 집계">
+        <option value="">발행년도 전체</option>
+        ${[...new Set(State.invoices.filter(v=>v.issueDate).map(v=>v.issueDate.slice(0,4)))].sort().reverse().map(y=>`<option value="${y}" ${invFilter.year===y?'selected':''}>${y}년 발행분</option>`).join('')}
       </select>
       <select onchange="invFilter.typeCode=this.value;_renderInvoices()">
         <option value="">사업본부 전체</option>
