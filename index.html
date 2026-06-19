@@ -2445,29 +2445,9 @@ Views.settings=function(){
   content.appendChild(card);
 };
 
-/* ===== 초기 실행 ===== */
-(async function(){
-  try{
-    // 1) Supabase 이메일 세션 확인 (관리자용)
-    var session=(await supa.auth.getSession()).data.session;
-    if(session){await SupaAuth.onLogin(session.user);return;}
 
-    // 2) PIN 세션 유지 확인 (새로고침 시 재입력 방지, 8시간 유효)
-    var pinSession=null;
-    try{ pinSession=JSON.parse(localStorage.getItem('ensign_pin_session')||'null'); }catch(e){}
-    if(pinSession && pinSession.expires>Date.now() && pinSession.user){
-      await SupaAuth.onLoginWithProfile(pinSession.user);
-      return;
-    }
-    localStorage.removeItem('ensign_pin_session');
-
-    // 3) 둘 다 없으면 PIN 로그인 화면
-    await PinAuth.init();
-  }catch(e){console.error('초기화 오류:',e);PinAuth.init();}
-})();
 </script>
 </body>
-</html>
 <script>
 /* =====================================================
    인사관리 (hr) — Views.hr + HR 객체
@@ -3733,4 +3713,26 @@ window.EdiagMail = {
     toast('엑셀 다운로드 완료');
   }
 };
+/* ===== 초기 실행 ===== */
+(async function(){
+  try{
+    // 1) Supabase 이메일 세션 확인 (관리자용)
+    var session=(await supa.auth.getSession()).data.session;
+    if(session){await SupaAuth.onLogin(session.user);return;}
+
+    // 2) PIN 세션 유지 확인 (새로고침 시 재입력 방지, 8시간 유효)
+    var pinSession=null;
+    try{ pinSession=JSON.parse(localStorage.getItem('ensign_pin_session')||'null'); }catch(e){}
+    if(pinSession && pinSession.expires>Date.now() && pinSession.user){
+      await SupaAuth.onLoginWithProfile(pinSession.user);
+      return;
+    }
+    localStorage.removeItem('ensign_pin_session');
+
+    // 3) 둘 다 없으면 PIN 로그인 화면
+    await PinAuth.init();
+  }catch(e){console.error('초기화 오류:',e);PinAuth.init();}
+})();
 </script>
+</body>
+</html>
