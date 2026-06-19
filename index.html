@@ -448,10 +448,11 @@ Views.dash = function(){
   const allYears = [...new Set(State.contracts.map(c=>c.year))].sort().reverse();
   // 올해가 데이터에 없으면 전체로 폴백
   if(dashYear && dashYear !== '' && !allYears.includes(dashYear)) dashYear = allYears[0] || '';
+  // 계약금액 합계: 계약의 대상년도(dashYear) 기준
   const cts = dashYear ? State.contracts.filter(c=>c.year===dashYear) : State.contracts;
-  const ctIds = new Set(cts.map(c=>c.id));
   const totalAmt = cts.reduce((s,c)=>s+(Number(c.supply)||0)+(Number(c.vat)||0),0);
-  const issued   = State.invoices.filter(v=>v.issueDate && ctIds.has(v.contractId));
+  // 세금계산서 발행/미수/입금 합계: 발행일자(issueDate)의 연도 기준 (계약 대상년도와 무관)
+  const issued   = State.invoices.filter(v=>v.issueDate && (!dashYear || v.issueDate.slice(0,4)===dashYear));
   const issuedAmt= issued.reduce((s,v)=>s+invoiceTotal(v),0);
   const unpaid   = issued.filter(v=>!v.paid);
   const unpaidAmt= unpaid.reduce((s,v)=>s+invoiceTotal(v),0);
