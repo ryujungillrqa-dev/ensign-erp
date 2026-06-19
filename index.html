@@ -232,9 +232,8 @@ const ROLE_MENUS = {
   '관리자':    ['contracts','ediagmail','ediag','invoices','dash','hr','auth','bank','match','savings','settings'],
   '부관리자':  ['contracts','ediagmail','ediag','invoices','dash','hr','auth','settings'],
   '계약담당':  ['contracts','ediagmail','ediag','invoices','dash'],
-  '에너지진단':['contracts','ediagmail','ediag'],
   '진단팀장':  ['contracts','ediagmail','ediag','invoices'],
-  '자금담당':  ['bank','match','savings','dash'],
+  '자금담당':  ['contracts','ediagmail','ediag','invoices','hr'],
   '일반직원':  ['contracts','ediagmail','ediag','invoices'],
 };
 
@@ -2018,8 +2017,21 @@ const SupaAuth = {
     route();
   },
   applyMenus(){
-    const role=_supaProfile?.role||'일반직원';
-    const allowed=ROLE_MENUS[role]||ROLE_MENUS['일반직원'];
+    const role = _supaProfile?.role||'일반직원';
+    // 관리자는 항상 전체 메뉴
+    let allowed;
+    if(role==='관리자'){
+      allowed = AUTH_MENUS.map(m=>m.key);
+    } else {
+      const perms = (State.auth.roles[role]||{}).perms || {};
+      // perms에 등록 안 된 역할은 ROLE_MENUS 기본값 사용 (하위호환)
+      const hasMatrix = Object.keys(perms).length>0;
+      if(hasMatrix){
+        allowed = AUTH_MENUS.filter(m=>(perms[m.key]||'none')!=='none').map(m=>m.key);
+      } else {
+        allowed = ROLE_MENUS[role]||ROLE_MENUS['일반직원'];
+      }
+    }
     document.querySelectorAll('#nav a[data-v]').forEach(function(a){
       a.style.display=allowed.includes(a.getAttribute('data-v'))?'':'none';
     });
