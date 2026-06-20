@@ -1426,6 +1426,87 @@ const Invoices = {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '세금계산서');
     XLSX.writeFile(wb, `엔자인_세금계산서_${todayStr()}.xlsx`);
+  },
+
+  /* 일괄등록 업로드 양식 다운로드 */
+  template(){
+    const sample = [{
+      '계약번호':'EN202401001', '구분':'전체발행', '발행일':'2024-03-15',
+      '공급가액':10000000, '세액':1000000,
+      '입금여부':'미수', '입금일':'', '비고':'예시 행입니다. 지우고 입력하세요'
+    }];
+    const guide = XLSX.utils.aoa_to_sheet([
+      ['엔자인 ERP 세금계산서 일괄등록 양식 안내'],[''],
+      ['열 이름','설명'],
+      ['계약번호','필수. 계약관리에 등록된 계약번호와 정확히 일치해야 합니다 (예: EN202401001)'],
+      ['구분','필수. 전체발행 / 선급금 / 중도금 / 잔금 중 하나. 해당 계약의 결제방식에 포함된 구분만 인식됩니다'],
+      ['발행일','YYYY-MM-DD 형식'],
+      ['공급가액','숫자만 입력 (쉼표 없이)'],
+      ['세액','숫자만 입력. 비우면 공급가액의 10%로 자동 계산'],
+      ['입금여부','입금 / 미수 (비우면 미수로 처리)'],
+      ['입금일','입금여부가 입금일 때만 입력. YYYY-MM-DD'],
+      ['비고','선택'],[''],
+      ['※ 계약번호+구분이 일치하는 기존 행이 있으면 덮어씁니다'],
+      ['※ 계약번호를 찾을 수 없는 행은 건너뜁니다']
+    ]);
+    guide['!cols'] = [{wch:12},{wch:70}];
+    const ws = XLSX.utils.json_to_sheet(sample);
+    ws['!cols'] = [{wch:14},{wch:10},{wch:12},{wch:12},{wch:10},{wch:10},{wch:12},{wch:30}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '세금계산서입력');
+    XLSX.utils.book_append_sheet(wb, guide, '작성안내');
+    XLSX.writeFile(wb, '엔자인_세금계산서등록양식.xlsx');
+  },
+
+  /* 일괄등록 엑셀 업로드 */
+  importXlsx(input){
+    const file = input.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = e=>{
+      try{
+        const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
+        const sheetName = wb.SheetNames.includes('세금계산서입력') ? '세금계산서입력' : wb.SheetNames[0];
+        const json = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {defval:''});
+        let ok=0; const errors=[];
+        json.forEach((r,i)=>{
+          const rowNo = i+2;
+          const keys = Object.keys(r);
+          const get = names=>{ const k=keys.find(k=>names.some(n=>k.replace(/\s/g,'').includes(n))); return k!=null?String(r[k]||'').trim():''; };
+          const ctNo = get(['계약번호']);
+          if(!ctNo){ if(keys.some(k=>String(r[k]).trim()!=='')) errors.push(rowNo+'행: 계약번호 누락'); return; }
+          const c = State.contracts.find(x=>x.no===ctNo);
+          if(!c){ errors.push(rowNo+'행: 계약번호 ['+ctNo+']을 찾을 수 없음'); return; }
+          const kind = get(['구분']);
+          const v = contractInvoices(c.id).find(x=>x.kind===kind);
+          if(!v){ errors.push(rowNo+'행: ['+ctNo+'] 계약에 ['+kind+'] 구분이 없음 (결제방식 확인)'); return; }
+          let issueDate = get(['발행일']);
+          if(r['발행일'] instanceof Date) issueDate = r['발행일'].toISOString().slice(0,10);
+          else issueDate = issueDate.slice(0,10).replace(/[./]/g,'-');
+          const supply = fmt.parseNum(get(['공급가액'])||'0');
+          let vat = get(['세액']);
+          vat = vat ? fmt.parseNum(vat) : Math.round(supply*0.1);
+          const paidRaw = get(['입금여부']);
+          const paid = paidRaw === '입금';
+          let paidDate = get(['입금일']);
+          if(r['입금일'] instanceof Date) paidDate = r['입금일'].toISOString().slice(0,10);
+          else paidDate = paidDate.slice(0,10).replace(/[./]/g,'-');
+          v.issueDate = issueDate.length===10 ? issueDate : '';
+          v.supply = supply;
+          v.vat = vat;
+          v.paid = paid;
+          v.paidDate = paid && paidDate.length===10 ? paidDate : (paid ? todayStr() : '');
+          v.memo = get(['비고']) || v.memo;
+          ok++;
+        });
+        State.saveAll(); _renderInvoices();
+        let msg = ok+'건 처리 완료';
+        if(errors.length) msg += ' · 건너뜀 '+errors.length+'건';
+        toast(msg);
+        if(errors.length) setTimeout(()=>alert('건너뛴 행:\n'+errors.join('\n')),300);
+      }catch(err){ toast('가져오기 실패: 파일 형식을 확인하세요'); console.error(err); }
+      input.value='';
+    };
+    reader.readAsArrayBuffer(file);
   }
 };
 
