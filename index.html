@@ -1136,10 +1136,11 @@ const Contracts = {
 /* =====================================================
    3) 세금계산서 — 더존식 그리드 (계약당 4행)
 ===================================================== */
-let invFilter    = { q:'', year:'', typeCode:'', onlyUnpaid:false };
+let invFilter    = { q:'', year:'', typeCode:'', onlyUnpaid:false, ctYear:'' };
 
 function _invHtml(){
   const cts = State.contracts.filter(c=>{
+    if(invFilter.ctYear && c.year !== invFilter.ctYear) return false; // 계약 대상년도 필터 (미발행 신규계약 검색용)
     if(invFilter.year){
       // 발행년도 필터: 해당 연도에 발행된 세금계산서가 있는 계약만 표시
       const hasIssueInYear = State.invoices.some(v=>v.contractId===c.id && v.issueDate && v.issueDate.slice(0,4)===invFilter.year);
@@ -1211,6 +1212,10 @@ Views.invoices = function(){
   document.getElementById('content').innerHTML = `
     <div class="toolbar sticky-toolbar">
       <input type="search" id="inv-search" placeholder="계약번호·계약명·업체명 검색" value="${esc(invFilter.q)}" oninput="searchInput(event,'inv')" style="width:200px">
+      <select onchange="invFilter.ctYear=this.value;_renderInvoices()" title="계약 대상년도로 검색 (미발행 신규 계약 찾기용)">
+        <option value="">계약년도 전체</option>
+        ${[...new Set(State.contracts.map(c=>c.year).filter(Boolean))].sort().reverse().map(y=>`<option value="${y}" ${invFilter.ctYear===y?'selected':''}>${y}년 계약</option>`).join('')}
+      </select>
       <select onchange="invFilter.year=this.value;_renderInvoices()" title="세금계산서 발행일 기준 연도로 필터링 및 합계 집계">
         <option value="">발행년도 전체</option>
         ${[...new Set(State.invoices.filter(v=>v.issueDate).map(v=>v.issueDate.slice(0,4)))].sort().reverse().map(y=>`<option value="${y}" ${invFilter.year===y?'selected':''}>${y}년 발행분</option>`).join('')}
