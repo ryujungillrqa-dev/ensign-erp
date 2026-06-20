@@ -610,21 +610,27 @@ Views.dash = function(){
   const invCumCur   = toCumulative(invMonthCur);
   const invCumPrev  = toCumulative(invMonthPrev);
 
-  /* 세로형(월이 행) 누적 비교표: 1월~12월, 계약금액·발행금액 각각 누적값+증감율 */
+  /* 세로형(월이 행) 비교표: 금액은 '해당월 실적', 증감율은 '1월~해당월 누적' 기준 */
+  const CT_BG  = '#eef5f0';  // 계약금액 영역 파스텔(연그린)
+  const INV_BG = '#eef2fa';  // 발행금액 영역 파스텔(연블루)
   const cumTableRows = [...Array(12)].map((_,i)=>{
     const m = i+1;
-    const ctCv=ctCumCur[i], ctPv=ctCumPrev[i];
-    const ivCv=invCumCur[i], ivPv=invCumPrev[i];
+    const ctMc=ctMonthCur[i], ctMp=ctMonthPrev[i];   // 해당월 실적
+    const ivMc=invMonthCur[i], ivMp=invMonthPrev[i]; // 해당월 실적
+    const ctCv=ctCumCur[i],  ctPv=ctCumPrev[i];      // 누적(증감율용)
+    const ivCv=invCumCur[i], ivPv=invCumPrev[i];     // 누적(증감율용)
     const ctChg = ctPv ? chgBadge(ctCv, ctPv) : '<span style="color:var(--ink3);font-size:10px">-</span>';
     const ivChg = ivPv ? chgBadge(ivCv, ivPv) : '<span style="color:var(--ink3);font-size:10px">-</span>';
     const isCurMonth = (baseYear===new Date().getFullYear() && m===new Date().getMonth()+1);
-    const bg = isCurMonth ? 'background:var(--brand-soft);' : '';
-    return `<tr style="${bg}">
-      <td class="ctr" style="${bg}font-weight:700">${m}월</td>
-      <td class="num" style="${bg}font-size:11px">${ctCv?fmt.money(ctCv):'-'}</td>
-      <td class="num" style="${bg}">${ctChg}</td>
-      <td class="num" style="${bg}font-size:11px">${ivCv?fmt.money(ivCv):'-'}</td>
-      <td class="num" style="${bg}">${ivChg}</td>
+    const hi = isCurMonth ? 'box-shadow:inset 0 0 0 1.5px var(--brand);' : '';
+    return `<tr>
+      <td class="ctr" style="font-weight:700;${hi}">${m}월</td>
+      <td class="num" style="background:${CT_BG};font-size:11px">${ctMp?fmt.money(ctMp):'-'}</td>
+      <td class="num" style="background:${CT_BG};font-size:11px;font-weight:600">${ctMc?fmt.money(ctMc):'-'}</td>
+      <td class="num" style="background:${CT_BG}">${ctChg}</td>
+      <td class="num" style="background:${INV_BG};font-size:11px">${ivMp?fmt.money(ivMp):'-'}</td>
+      <td class="num" style="background:${INV_BG};font-size:11px;font-weight:600">${ivMc?fmt.money(ivMc):'-'}</td>
+      <td class="num" style="background:${INV_BG}">${ivChg}</td>
     </tr>`;
   }).join('');
   const statRowsNew = yearStats.map((s,i)=>{
@@ -715,19 +721,23 @@ Views.dash = function(){
           </table>
         </div>
       </div>
-      <!-- 직전년도 월별 누적 비교 -->
+      <!-- 직전년도 월별 비교 -->
       <div class="card" style="margin:0;display:flex;flex-direction:column">
-        <div class="hd" style="padding:11px 16px"><h2>월별 누적 비교 — ${curYear}년 vs ${prevYear}년 <span style="font-size:11px;color:var(--ink3);font-weight:500">(1월~해당월 누적, ▲▼ 전년동기대비)</span></h2></div>
+        <div class="hd" style="padding:11px 16px"><h2>월별 비교 — ${curYear}년 vs ${prevYear}년 <span style="font-size:11px;color:var(--ink3);font-weight:500">(증감율은 1월~해당월 누적 기준)</span></h2></div>
         <div class="bd np" style="flex:1;overflow-y:auto;max-height:420px">
           <table class="grid" style="font-size:12px">
             <thead><tr>
               <th class="ctr" rowspan="2" style="vertical-align:middle">월</th>
-              <th class="num" colspan="2">계약금액(누적)</th>
-              <th class="num" colspan="2">발행금액(누적)</th>
+              <th class="num" colspan="3" style="background:#eef5f0">계약금액</th>
+              <th class="num" colspan="3" style="background:#eef2fa">발행금액</th>
             </tr>
             <tr>
-              <th class="num" style="font-size:10.5px">${curYear}년</th><th class="num" style="font-size:10.5px">증감율</th>
-              <th class="num" style="font-size:10.5px">${curYear}년</th><th class="num" style="font-size:10.5px">증감율</th>
+              <th class="num" style="font-size:10.5px;background:#eef5f0">${prevYear}년</th>
+              <th class="num" style="font-size:10.5px;background:#eef5f0">${curYear}년</th>
+              <th class="num" style="font-size:10.5px;background:#eef5f0">증감율</th>
+              <th class="num" style="font-size:10.5px;background:#eef2fa">${prevYear}년</th>
+              <th class="num" style="font-size:10.5px;background:#eef2fa">${curYear}년</th>
+              <th class="num" style="font-size:10.5px;background:#eef2fa">증감율</th>
             </tr></thead>
             <tbody>${cumTableRows}</tbody>
           </table>
