@@ -2,6 +2,9 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ENSIGN ERP — ㈜엔자인 운영관리시스템</title>
@@ -114,6 +117,7 @@ table.grid td.ctr,table.grid th.ctr{text-align:center}
 .kpi.b{border-top:3px solid var(--blue)}
 .kpi.c{border-top:3px solid var(--amber)}
 .kpi.d{border-top:3px solid var(--green)}
+.kpi.e{border-top:3px solid #3a57c9}
 
 /* 더존식 세금계산서 그리드 */
 table.dz{width:100%;border-collapse:collapse;font-size:12.5px}
@@ -448,10 +452,11 @@ Views.dash = function(){
   const allYears = [...new Set(State.contracts.map(c=>c.year))].sort().reverse();
   // 올해가 데이터에 없으면 전체로 폴백
   if(dashYear && dashYear !== '' && !allYears.includes(dashYear)) dashYear = allYears[0] || '';
+  // 계약금액 합계: 계약의 대상년도(dashYear) 기준
   const cts = dashYear ? State.contracts.filter(c=>c.year===dashYear) : State.contracts;
-  const ctIds = new Set(cts.map(c=>c.id));
   const totalAmt = cts.reduce((s,c)=>s+(Number(c.supply)||0)+(Number(c.vat)||0),0);
-  const issued   = State.invoices.filter(v=>v.issueDate && ctIds.has(v.contractId));
+  // 세금계산서 발행/미수/입금 합계: 발행일자(issueDate)의 연도 기준 (계약 대상년도와 무관)
+  const issued   = State.invoices.filter(v=>v.issueDate && (!dashYear || v.issueDate.slice(0,4)===dashYear));
   const issuedAmt= issued.reduce((s,v)=>s+invoiceTotal(v),0);
   const unpaid   = issued.filter(v=>!v.paid);
   const unpaidAmt= unpaid.reduce((s,v)=>s+invoiceTotal(v),0);
@@ -475,13 +480,21 @@ Views.dash = function(){
 
   /* 구분별 */
   const byType = {};
-  Object.keys(TYPE_CODES).forEach(k=>byType[k]={cnt:0,amt:0});
+  Object.keys(TYPE_CODES).forEach(k=>byType[k]={cnt:0,amt:0,issuedAmt:0});
   cts.forEach(c=>{ if(byType[c.typeCode]){ byType[c.typeCode].cnt++; byType[c.typeCode].amt+=(Number(c.supply)||0)+(Number(c.vat)||0); } });
+  // 사업본부별 계산서 발행금액: '발행일 기준 연도(issued)'에 속한 세금계산서를 계약의 사업본부로 집계
+  const ctIdToType = {};
+  State.contracts.forEach(c=>{ ctIdToType[c.id]=c.typeCode; });
+  issued.forEach(v=>{
+    const tc = ctIdToType[v.contractId];
+    if(tc && byType[tc]) byType[tc].issuedAmt += invoiceTotal(v);
+  });
   const typeRows = Object.keys(TYPE_CODES).filter(k=>byType[k].cnt>0||true).map(k=>`
     <tr>
       <td><span class="tag ${TYPE_TAG[k]}">${TYPE_CODES[k]}</span></td>
       <td class="ctr">${byType[k].cnt}건</td>
       <td class="num">${fmt.money(byType[k].amt)}</td>
+      <td class="num">${fmt.money(byType[k].issuedAmt)}</td>
     </tr>`).join('');
 
   /* 년도별 비교: 3개년 그래프로 대체됨 */
@@ -507,44 +520,64 @@ Views.dash = function(){
     const unpaid= invAmt - paid;
     return { y, ctAmt, invAmt, paid, unpaid, cnt:ycts.length };
   });
-  const maxAmt = Math.max(...yearStats.flatMap(s=>[s.ctAmt, s.invAmt]), 1);
 
-  /* SVG 막대 그래프 공통 함수 */
-  function barChart(stats, series, colors, title){
-    const W=420, H=240, PL=56, PR=16, PT=22, PB=34;
+  /* 월별 비교: 올해(baseYear) vs 전년도(baseYear-1), 계약금액(계약일 기준)·발행금액(발행일 기준) */
+  const curYear  = String(baseYear);
+  const prevYear = String(baseYear-1);
+  function monthlyAmtByDate(dateField, items, getAmt, year){
+    const arr = Array(12).fill(0);
+    items.forEach(it=>{
+      const d = it[dateField];
+      if(!d || d.slice(0,4)!==year) return;
+      const m = parseInt(d.slice(5,7),10)-1;
+      if(m>=0 && m<12) arr[m]+=getAmt(it);
+    });
+    return arr;
+  }
+  const ctMonthCur   = monthlyAmtByDate('contractDate', State.contracts, c=>(Number(c.supply)||0)+(Number(c.vat)||0), curYear);
+  const ctMonthPrev  = monthlyAmtByDate('contractDate', State.contracts, c=>(Number(c.supply)||0)+(Number(c.vat)||0), prevYear);
+  const invMonthCur  = monthlyAmtByDate('issueDate', State.invoices, v=>invoiceTotal(v), curYear);
+  const invMonthPrev = monthlyAmtByDate('issueDate', State.invoices, v=>invoiceTotal(v), prevYear);
+
+  /* 월별 비교 그래프 (계약금액 / 발행금액, 올해 vs 전년도) */
+  function monthLineChart(curArr, prevArr, title, curColor, prevColor){
+    const W=560, H=200, PL=50, PR=14, PT=22, PB=22;
     const cw=W-PL-PR, ch=H-PT-PB;
-    const bw=Math.floor(cw/stats.length/series.length*0.7);
-    const gap=Math.floor(cw/stats.length);
-    let bars='', xlabels='', ylabels='';
+    const maxV = Math.max(...curArr, ...prevArr, 1);
+    const stepX = cw/11;
+    function pt(arr,i){ const x=PL+stepX*i; const y=PT+ch-(arr[i]/maxV*ch); return [x,y]; }
+    function pathOf(arr){ return arr.map((_,i)=>{ const [x,y]=pt(arr,i); return (i===0?'M':'L')+x+','+y; }).join(' '); }
+    let ylabels='';
     const steps=4;
     for(let i=0;i<=steps;i++){
-      const v=maxAmt/steps*i;
+      const v=maxV/steps*i;
       const y2=PT+ch-(ch*i/steps);
       ylabels+=`<text x="${PL-6}" y="${y2+4}" text-anchor="end" font-size="9" fill="#92a0ae">${(v/100000000).toFixed(1)}억</text>`;
       ylabels+=`<line x1="${PL}" y1="${y2}" x2="${W-PR}" y2="${y2}" stroke="#eef1f4" stroke-width="1"/>`;
     }
-    stats.forEach((s,i)=>{
-      const gx = PL + i*gap + gap/2;
-      series.forEach((key,j)=>{
-        const val=s[key]||0;
-        const bh=Math.max(val/maxAmt*ch,0);
-        const bx=gx+(j-(series.length-1)/2)*(bw+2);
-        const by=PT+ch-bh;
-        bars+=`<rect x="${bx-bw/2}" y="${by}" width="${bw}" height="${bh}" fill="${colors[j]}" rx="2"/>`;
-        const txtColor = colors[j].replace(/^#([0-9a-f]{6})$/i, (_,h)=>{ const r=parseInt(h.slice(0,2),16)-40, g=parseInt(h.slice(2,4),16)-40, b=parseInt(h.slice(4,6),16)-40; return '#'+[r,g,b].map(x=>Math.max(0,x).toString(16).padStart(2,'0')).join(''); }); if(val>0) bars+=`<text x="${bx}" y="${by-3}" text-anchor="middle" font-size="8" fill="${txtColor}" font-weight="700">${fmt.money(Math.round(val/10000))}만</text>`;
-      });
-      xlabels+=`<text x="${gx}" y="${H-PB+16}" text-anchor="middle" font-size="10" fill="#5b6b7b" font-weight="600">${s.y}년</text>`;
+    let xlabels='';
+    for(let i=0;i<12;i++){
+      const [x] = pt(curArr,i);
+      xlabels+=`<text x="${x}" y="${H-PB+14}" text-anchor="middle" font-size="9" fill="#5b6b7b">${i+1}월</text>`;
+    }
+    let dots='';
+    [curArr,prevArr].forEach((arr,ai)=>{
+      const color = ai===0?curColor:prevColor;
+      arr.forEach((v,i)=>{ const [x,y]=pt(arr,i); dots+=`<circle cx="${x}" cy="${y}" r="2.5" fill="${color}"/>`; });
     });
-    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:100%;min-height:200px">
-      <text x="${W/2}" y="14" text-anchor="middle" font-size="11" fill="#1c2733" font-weight="700">${title}</text>
-      ${ylabels}${bars}${xlabels}
+    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:100%;min-height:170px">
+      <text x="${W/2}" y="13" text-anchor="middle" font-size="11" fill="#1c2733" font-weight="700">${title}</text>
+      ${ylabels}
+      <path d="${pathOf(prevArr)}" fill="none" stroke="${prevColor}" stroke-width="2" stroke-dasharray="4,3"/>
+      <path d="${pathOf(curArr)}" fill="none" stroke="${curColor}" stroke-width="2.5"/>
+      ${dots}
+      ${xlabels}
     </svg>`;
   }
+  const ctMonthChart  = monthLineChart(ctMonthCur, ctMonthPrev, '계약금액 월별 비교 ('+curYear+'년 vs '+prevYear+'년)', '#0e5e54', '#b7c4c1');
+  const invMonthChart = monthLineChart(invMonthCur, invMonthPrev, '세금계산서 발행금액 월별 비교 ('+curYear+'년 vs '+prevYear+'년)', '#3a57c9', '#b7c4c1');
 
-  const ctChart  = barChart(yearStats, ['ctAmt'],          ['#7ec8c8'],          '계약금액 (VAT포함)');
-  const invChart = barChart(yearStats, ['invAmt','paid'],   ['#90b4e0','#95d5b2'],'세금계산서 발행 / 입금');
-
-  /* statRows → statRowsNew(증감율 포함)로 대체됨 */
+  /* 증감율 계산 함수 (statRowsNew 및 월별표에서 공용 사용) */
 
   /* 증감율 계산 */
   function chgRate(cur, prev){
@@ -557,28 +590,71 @@ Views.dash = function(){
     const up = Number(r) >= 0;
     return `<span style="color:${up?'var(--red)':'var(--blue)'};font-size:10.5px;font-weight:700">${up?'▲':'▼'}${Math.abs(r)}%</span>`;
   }
+  function monthRow(label, curArr, prevArr){
+    const cells = curArr.map((cv,i)=>{
+      const pv = prevArr[i];
+      const chg = pv ? chgBadge(cv, pv) : '';
+      return `<td class="num" style="font-size:10.5px;white-space:nowrap">${cv?fmt.money(cv):'-'}<br>${chg}</td>`;
+    }).join('');
+    return `<tr><td class="lbl" style="white-space:nowrap;font-weight:600">${label}</td>${cells}</tr>`;
+  }
+
+  /* 월별 '누적' 배열 생성 (1월부터 해당월까지 합산) */
+  function toCumulative(arr){
+    const out=[]; let s=0;
+    arr.forEach(v=>{ s+=v; out.push(s); });
+    return out;
+  }
+  const ctCumCur    = toCumulative(ctMonthCur);
+  const ctCumPrev   = toCumulative(ctMonthPrev);
+  const invCumCur   = toCumulative(invMonthCur);
+  const invCumPrev  = toCumulative(invMonthPrev);
+
+  /* 세로형(월이 행) 비교표: 금액은 '해당월 실적', 증감율은 '1월~해당월 누적' 기준 */
+  const CT_BG  = '#eef5f0';  // 계약금액 영역 파스텔(연그린)
+  const INV_BG = '#eef2fa';  // 발행금액 영역 파스텔(연블루)
+  const cumTableRows = [...Array(12)].map((_,i)=>{
+    const m = i+1;
+    const ctMc=ctMonthCur[i], ctMp=ctMonthPrev[i];   // 해당월 실적
+    const ivMc=invMonthCur[i], ivMp=invMonthPrev[i]; // 해당월 실적
+    const ctCv=ctCumCur[i],  ctPv=ctCumPrev[i];      // 누적(증감율용)
+    const ivCv=invCumCur[i], ivPv=invCumPrev[i];     // 누적(증감율용)
+    const ctChg = ctPv ? chgBadge(ctCv, ctPv) : '<span style="color:var(--ink3);font-size:10px">-</span>';
+    const ivChg = ivPv ? chgBadge(ivCv, ivPv) : '<span style="color:var(--ink3);font-size:10px">-</span>';
+    const isCurMonth = (baseYear===new Date().getFullYear() && m===new Date().getMonth()+1);
+    const hi = isCurMonth ? 'box-shadow:inset 0 0 0 1.5px var(--brand);' : '';
+    return `<tr>
+      <td class="ctr" style="font-weight:700;${hi}">${m}월</td>
+      <td class="num" style="background:${CT_BG};font-size:11px">${ctMp?fmt.money(ctMp):'-'}</td>
+      <td class="num" style="background:${CT_BG};font-size:11px;font-weight:600">${ctMc?fmt.money(ctMc):'-'}</td>
+      <td class="num" style="background:${CT_BG}">${ctChg}</td>
+      <td class="num" style="background:${INV_BG};font-size:11px">${ivMp?fmt.money(ivMp):'-'}</td>
+      <td class="num" style="background:${INV_BG};font-size:11px;font-weight:600">${ivMc?fmt.money(ivMc):'-'}</td>
+      <td class="num" style="background:${INV_BG}">${ivChg}</td>
+    </tr>`;
+  }).join('');
   const statRowsNew = yearStats.map((s,i)=>{
-    const prev = i > 0 ? yearStats[i-1] : null;
     const bg = s.y===String(baseYear) ? 'background:var(--brand-soft);' : '';
     const fw = s.y===String(baseYear) ? 'font-weight:700;' : '';
-    const ctChg  = prev ? chgBadge(s.ctAmt,  prev.ctAmt)  : '';
-    const invChg = prev ? chgBadge(s.invAmt, prev.invAmt) : '';
-    // 금액 행
-    const amtRow = `<tr style="${bg}${fw}">
-      <td class="ctr" rowspan="2" style="${bg}border-bottom:1px solid var(--line);"><b>${s.y}년</b></td>
-      <td class="ctr" rowspan="2" style="${bg}border-bottom:1px solid var(--line);">${s.cnt}건</td>
-      <td class="num" style="padding-bottom:2px;border-bottom:0;${bg}${fw}">${fmt.money(s.ctAmt)}</td>
-      <td class="num" style="padding-bottom:2px;border-bottom:0;${bg}${fw}">${fmt.money(s.invAmt)}</td>
-      <td class="num" rowspan="2" style="color:var(--green);${bg}border-bottom:1px solid var(--line);">${fmt.money(s.paid)}</td>
-      <td class="num" rowspan="2" style="color:${s.unpaid>0?'var(--red)':'inherit'};${bg}border-bottom:1px solid var(--line);">${fmt.money(s.unpaid)}</td>
+    return `<tr style="${bg}${fw}">
+      <td class="ctr" style="${bg}"><b>${s.y}년</b></td>
+      <td class="ctr" style="${bg}">${s.cnt}건</td>
+      <td class="num" style="${bg}${fw}">${fmt.money(s.ctAmt)}</td>
+      <td class="num" style="${bg}${fw}">${fmt.money(s.invAmt)}</td>
     </tr>`;
-    // 증감율 행
-    const chgRow = `<tr style="${bg}">
-      <td class="num" style="padding-top:1px;padding-bottom:6px;border-bottom:1px solid var(--line2);${bg}">${ctChg}</td>
-      <td class="num" style="padding-top:1px;padding-bottom:6px;border-bottom:1px solid var(--line2);${bg}">${invChg}</td>
+  }).join('') + (function(){
+    // 맨 아래 증감율 행 (최근년도 vs 그 전년도)
+    const last = yearStats[yearStats.length-1];
+    const prev = yearStats.length>1 ? yearStats[yearStats.length-2] : null;
+    const ctChg  = prev ? chgBadge(last.ctAmt,  prev.ctAmt)  : '<span style="color:var(--ink3);font-size:11px">-</span>';
+    const invChg = prev ? chgBadge(last.invAmt, prev.invAmt) : '<span style="color:var(--ink3);font-size:11px">-</span>';
+    return `<tr style="border-top:2px solid var(--line)">
+      <td class="ctr" style="font-weight:700;color:var(--ink2)">증감율</td>
+      <td class="ctr" style="color:var(--ink3);font-size:11px">전년대비</td>
+      <td class="num">${ctChg}</td>
+      <td class="num">${invChg}</td>
     </tr>`;
-    return amtRow + chgRow;
-  }).join('');
+  })();
 
   document.getElementById('content').innerHTML = `
     <!-- 년도 탭 -->
@@ -588,10 +664,10 @@ Views.dash = function(){
     </div>
 
     <!-- KPI -->
-    <div class="kpis" style="grid-template-columns:repeat(3,1fr) minmax(180px,1.2fr)">
-      <!-- 계약·계약금액·미수금 -->
+    <div class="kpis" style="grid-template-columns:repeat(4,minmax(0,1fr)) minmax(170px,1.1fr)">
       <div class="kpi a"><div class="lb">${yearLabel} 계약</div><div class="vl">${cts.length}<small> 건</small></div></div>
       <div class="kpi b"><div class="lb">${yearLabel} 계약금액</div><div class="vl">${fmt.money(totalAmt)}<small> 원</small></div></div>
+      <div class="kpi e"><div class="lb">${yearLabel} 세금계산서발행금액</div><div class="vl">${fmt.money(issuedAmt)}<small> 원</small></div></div>
       <div class="kpi c"><div class="lb">${yearLabel} 미수금</div>
         <div class="vl" style="color:${unpaidAmt>0?'var(--red)':'inherit'}">${fmt.money(unpaidAmt)}<small> 원</small></div></div>
 
@@ -604,36 +680,16 @@ Views.dash = function(){
         <div class="vl">${fmt.money(bankBal)}<small> 원</small></div>
         <div style="margin-top:6px;font-size:11px;color:var(--ink3)">${bankList.length}개 계좌 합산</div>
       </div>
-
-
     </div>
 
-    <!-- 발행현황 + 구분별 + 최근계약 (1행으로) -->
-    <div style="display:grid;grid-template-columns:180px 260px 1fr;gap:10px;margin-bottom:12px">
-      <!-- 발행/입금 현황 -->
-      <div class="card" style="margin:0;display:flex;flex-direction:column">
-        <div class="hd" style="padding:10px 14px"><h2 style="font-size:13px">${yearLabel} 발행현황</h2></div>
-        <div class="bd" style="flex:1;padding:0 14px;display:flex;flex-direction:column;justify-content:space-evenly">
-          <div style="padding:10px 0;border-bottom:1px solid var(--line2)">
-            <div style="font-size:11px;color:var(--ink2);font-weight:600;margin-bottom:4px">발행 완료</div>
-            <div style="font-size:16px;font-weight:800">${fmt.money(issuedAmt)}<span style="font-size:11px;color:var(--ink3)"> 원</span></div>
-          </div>
-          <div style="padding:10px 0;border-bottom:1px solid var(--line2)">
-            <div style="font-size:11px;color:var(--green);font-weight:600;margin-bottom:4px">입금 완료</div>
-            <div style="font-size:16px;font-weight:800;color:var(--green)">${fmt.money(paidAmt)}<span style="font-size:11px"> 원</span></div>
-          </div>
-          <div style="padding:10px 0">
-            <div style="font-size:11px;color:var(--red);font-weight:600;margin-bottom:4px">미수금</div>
-            <div style="font-size:16px;font-weight:800;color:${unpaidAmt>0?'var(--red)':'var(--ink)'}">${fmt.money(unpaidAmt)}<span style="font-size:11px"> 원</span></div>
-          </div>
-        </div>
-      </div>
-      <!-- 구분별 현황 -->
+    <!-- 구분별 + 최근계약 (1행으로) -->
+    <div style="display:grid;grid-template-columns:360px 1fr;gap:10px;margin-bottom:12px">
+      <!-- 사업본부별 현황 (계약금액 + 계산서발행금액) -->
       <div class="card" style="margin:0">
         <div class="hd" style="padding:10px 14px"><h2 style="font-size:13px">사업본부별 현황 (${yearLabel})</h2></div>
         <div class="bd np">
           <table class="grid" style="font-size:12px">
-            <thead><tr><th>사업본부</th><th class="ctr">건수</th><th class="num">계약금액</th></tr></thead>
+            <thead><tr><th>사업본부</th><th class="ctr">건수</th><th class="num">계약금액</th><th class="num">계산서발행금액</th></tr></thead>
             <tbody>${typeRows}</tbody>
           </table>
         </div>
@@ -650,36 +706,63 @@ Views.dash = function(){
       </div>
     </div>
 
-    <!-- 3개년 비교 표 + 그래프 -->
-    <div class="card" style="margin-bottom:0;display:flex;flex-direction:column">
-      <div class="hd" style="padding:11px 16px"><h2>최근 3개년 비교 (${baseYear-2}~${baseYear}년) <span style="font-size:11.5px;color:var(--ink3);font-weight:500">▲▼ 전년대비 증감율</span></h2></div>
-      <div style="display:grid;grid-template-columns:auto 1fr 1fr;gap:0;flex:1;min-height:0">
-        <!-- 비교 표 -->
-        <div style="border-right:1px solid var(--line2);min-width:360px">
-          <table class="grid" style="font-size:12px">
+    <!-- 3개년 비교 표 + 직전년도 월별 누적비교 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0">
+      <!-- 최근 3개년 비교 -->
+      <div class="card" style="margin:0;display:flex;flex-direction:column">
+        <div class="hd" style="padding:11px 16px"><h2>최근 3개년 비교 (${baseYear-2}~${baseYear}년)</h2></div>
+        <div style="padding:0 16px 14px">
+          <table class="grid" style="font-size:12px;max-width:480px">
             <thead><tr>
               <th class="ctr">년도</th><th class="ctr">계약수</th>
               <th class="num">계약금액</th><th class="num">발행금액</th>
-              <th class="num">입금</th><th class="num">미수금</th>
             </tr></thead>
             <tbody>${statRowsNew}</tbody>
           </table>
         </div>
-        <!-- 계약금액 그래프 -->
-        <div style="padding:10px 14px 6px;border-right:1px solid var(--line2);display:flex;flex-direction:column">
-          <div style="flex:1">${ctChart}</div>
-          <div style="display:flex;gap:8px;justify-content:center;margin-top:4px">
-            <span style="font-size:10.5px;color:#5b6b7b;display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:9px;height:9px;background:#7ec8c8;border-radius:2px"></span>계약금액</span>
-          </div>
+      </div>
+      <!-- 직전년도 월별 비교 -->
+      <div class="card" style="margin:0;display:flex;flex-direction:column">
+        <div class="hd" style="padding:11px 16px"><h2>월별 비교 — ${curYear}년 vs ${prevYear}년 <span style="font-size:11px;color:var(--ink3);font-weight:500">(증감율은 1월~해당월 누적 기준)</span></h2></div>
+        <div class="bd np" style="flex:1;overflow-y:auto;max-height:420px">
+          <table class="grid" style="font-size:12px">
+            <thead><tr>
+              <th class="ctr" rowspan="2" style="vertical-align:middle">월</th>
+              <th class="num" colspan="3" style="background:#eef5f0">계약금액</th>
+              <th class="num" colspan="3" style="background:#eef2fa">발행금액</th>
+            </tr>
+            <tr>
+              <th class="num" style="font-size:10.5px;background:#eef5f0">${prevYear}년</th>
+              <th class="num" style="font-size:10.5px;background:#eef5f0">${curYear}년</th>
+              <th class="num" style="font-size:10.5px;background:#eef5f0">증감율</th>
+              <th class="num" style="font-size:10.5px;background:#eef2fa">${prevYear}년</th>
+              <th class="num" style="font-size:10.5px;background:#eef2fa">${curYear}년</th>
+              <th class="num" style="font-size:10.5px;background:#eef2fa">증감율</th>
+            </tr></thead>
+            <tbody>${cumTableRows}</tbody>
+          </table>
         </div>
-        <!-- 발행/입금 그래프 -->
-        <div style="padding:10px 14px 6px;display:flex;flex-direction:column">
-          <div style="flex:1">${invChart}</div>
-          <div style="display:flex;gap:8px;justify-content:center;margin-top:4px">
-            <span style="font-size:10.5px;color:#5b6b7b;display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:9px;height:9px;background:#90b4e0;border-radius:2px"></span>발행금액</span>
-            <span style="font-size:10.5px;color:#5b6b7b;display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:9px;height:9px;background:#95d5b2;border-radius:2px"></span>입금금액</span>
-          </div>
-        </div>
+      </div>
+    </div>
+
+    <!-- 월별 비교 (전년 동월 대비) -->
+    <div class="card" style="margin-top:10px;margin-bottom:0">
+      <div class="hd" style="padding:11px 16px"><h2>월별 비교 — ${curYear}년 vs ${prevYear}년 <span style="font-size:11.5px;color:var(--ink3);font-weight:500">계약금액(계약일 기준) · 발행금액(발행일 기준)</span></h2></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
+        <div style="padding:10px 14px 6px;border-right:1px solid var(--line2)">${ctMonthChart}</div>
+        <div style="padding:10px 14px 6px">${invMonthChart}</div>
+      </div>
+      <div class="bd np" style="overflow-x:auto">
+        <table class="grid" style="font-size:11px;min-width:900px">
+          <thead><tr>
+            <th class="lbl" style="width:90px">구분</th>
+            ${[...Array(12)].map((_,i)=>`<th class="ctr">${i+1}월</th>`).join('')}
+          </tr></thead>
+          <tbody>
+            ${monthRow('계약금액('+curYear+')', ctMonthCur, ctMonthPrev)}
+            ${monthRow('발행금액('+curYear+')', invMonthCur, invMonthPrev)}
+          </tbody>
+        </table>
       </div>
     </div>
   `;
@@ -829,7 +912,7 @@ const Contracts = {
   calcGrade(){
     document.getElementById('f-grade').value = toeGrade(document.getElementById('f-toe').value);
   },
-  save(id){
+  async save(id){
     const g = id => document.getElementById(id);
     const name = g('f-name').value.trim();
     if(!name){ toast('계약명을 입력하세요'); return; }
@@ -853,20 +936,28 @@ const Contracts = {
     };
     if(id){
       const c = contractById(id);
-      // 체크 해제된 결제방식의 계산서 행 처리: 데이터가 있으면 확인 후 삭제
+      // 체크 해제된 결제방식의 계산서 행 처리: 항목별로 삭제 여부를 개별 확인
       const removing = contractInvoices(id).filter(v=>!payKinds.includes(v.kind));
-      const withData = removing.filter(v=>v.issueDate || Number(v.supply) || Number(v.vat) || v.paid);
-      if(withData.length){
-        const names = withData.map(v=>v.kind).join(', ');
-        if(!confirm(`체크 해제한 [${names}] 행에 입력된 내용이 있습니다.\n해당 세금계산서 행을 삭제할까요?`)) return;
-      }
-      State.invoices = State.invoices.filter(v=>!(v.contractId===id && !payKinds.includes(v.kind)));
+      const keepKinds = []; // 사용자가 '삭제 안 함'을 선택한 항목은 payKinds에 다시 포함
+      removing.forEach(v=>{
+        const withData = v.issueDate || Number(v.supply) || Number(v.vat) || v.paid;
+        const msg = withData
+          ? `[${v.kind}] 행에 입력된 내용이 있습니다.\n이 세금계산서 행을 삭제할까요?\n(취소 시 결제방식에 그대로 유지됩니다)`
+          : `[${v.kind}] 항목의 세금계산서 행을 삭제할까요?\n(취소 시 결제방식에 그대로 유지됩니다)`;
+        if(!confirm(msg)){
+          keepKinds.push(v.kind); // 삭제하지 않기로 함 → 결제방식 유지
+        }
+      });
+      const finalPayKinds = [...new Set([...payKinds, ...keepKinds])];
+      const finalRemoving = removing.filter(v=>!keepKinds.includes(v.kind));
+      State.invoices = State.invoices.filter(v=>!(v.contractId===id && finalRemoving.some(r=>r.kind===v.kind)));
       // 새로 체크된 결제방식 행 추가
-      payKinds.forEach(kind=>{
+      finalPayKinds.forEach(kind=>{
         if(!contractInvoices(id).some(v=>v.kind===kind)){
           State.invoices.push({ id:DB.uid(), contractId:id, kind, planDate:'', issueDate:'', supply:0, vat:0, paid:false, paidDate:'', memo:'' });
         }
       });
+      data.payKinds = finalPayKinds;
       Object.assign(c, data);
       toast('계약이 수정되었습니다');
     } else {
@@ -879,16 +970,33 @@ const Contracts = {
       });
       toast('계약 등록 완료 · 계약번호 '+data.no);
     }
-    State.saveAll(); UI.closeModal(); Views.contracts();
+    toast('저장 중...');
+    try{
+      await State.saveAll();
+      toast('✅ 저장 완료');
+    }catch(e){
+      toast('❌ 저장 실패: '+e.message+' (변경사항이 저장되지 않았습니다)');
+    }
+    UI.closeModal(); Views.contracts();
   },
-  del(id){
+  async del(id){
     const c = contractById(id);
     if(!c) return;
     if(!confirm(`[${c.no}] ${c.name}\n계약과 연결된 세금계산서 행이 함께 삭제됩니다. 진행할까요?`)) return;
+    const delIds = State.invoices.filter(v=>v.contractId===id).map(v=>v.id);
     State.contracts = State.contracts.filter(x=>x.id!==id);
     State.invoices = State.invoices.filter(v=>v.contractId!==id);
     State.bank.forEach(b=>{ const inv = State.invoices.find(v=>v.id===b.matchInvoiceId); if(!inv) b.matchInvoiceId = b.matchInvoiceId && null; });
-    State.saveAll(); Views.contracts(); toast('삭제되었습니다');
+    try{
+      // 삭제는 Supabase에서도 명시적으로 delete (upsert만으로는 row가 안 지워짐)
+      await supa.from('contracts').delete().eq('id', id);
+      if(delIds.length) await supa.from('invoices').delete().in('id', delIds);
+      await State.saveAll();
+      toast('✅ 삭제되었습니다');
+    }catch(e){
+      toast('❌ 삭제 실패: '+e.message);
+    }
+    Views.contracts();
   },
   template(){
     const sample = [{
@@ -1002,7 +1110,11 @@ let invFilter    = { q:'', year:'', typeCode:'', onlyUnpaid:false };
 
 function _invHtml(){
   const cts = State.contracts.filter(c=>{
-    if(invFilter.year     && c.year     !== invFilter.year)     return false;
+    if(invFilter.year){
+      // 발행년도 필터: 해당 연도에 발행된 세금계산서가 있는 계약만 표시
+      const hasIssueInYear = State.invoices.some(v=>v.contractId===c.id && v.issueDate && v.issueDate.slice(0,4)===invFilter.year);
+      if(!hasIssueInYear) return false;
+    }
     if(invFilter.typeCode && c.typeCode !== invFilter.typeCode) return false;
     if(invFilter.q){
       const q = invFilter.q.toLowerCase();
@@ -1015,8 +1127,10 @@ function _invHtml(){
     const invs = INV_KINDS.map(k=>contractInvoices(c.id).find(v=>v.kind===k)).filter(Boolean);
     if(invFilter.onlyUnpaid && !invs.some(v=>v.issueDate && !v.paid)) return;
     const ctotal=(Number(c.supply)||0)+(Number(c.vat)||0);
-    const issuedSum=invs.filter(v=>v.issueDate).reduce((s,v)=>s+invoiceTotal(v),0);
-    const paidSum=invs.filter(v=>v.paid).reduce((s,v)=>s+invoiceTotal(v),0);
+    // 총 발행금액 합계: '세금계산서 발행일' 기준 연도로 집계 (연도 미선택 시 전체발행분 = 발행일이 있는 모든 건)
+    const issuedInvs = invs.filter(v=>v.issueDate && (!invFilter.year || v.issueDate.slice(0,4)===invFilter.year));
+    const issuedSum = issuedInvs.reduce((s,v)=>s+invoiceTotal(v),0);
+    const paidSum   = issuedInvs.filter(v=>v.paid).reduce((s,v)=>s+invoiceTotal(v),0);
     grandIssued+=issuedSum; grandUnpaid+=issuedSum-paidSum;
     const bodyRows=invs.map(v=>{
         const tot = invoiceTotal(v);
@@ -1059,17 +1173,17 @@ function _renderInvoices(){
   const wrap = document.getElementById('inv-list');
   const sm   = document.getElementById('inv-summary');
   if(wrap) wrap.innerHTML = html;
-  if(sm)   sm.innerHTML   = `총발행 <b>${fmt.num(grandIssued)}</b>원 · 총미수 <b style="color:var(--red)">${fmt.num(grandUnpaid)}</b>원`;
+  const yearLabel = invFilter.year ? invFilter.year+'년 발행분 ' : '';
+  if(sm)   sm.innerHTML   = `${yearLabel}총발행 <b>${fmt.num(grandIssued)}</b>원 · 총미수 <b style="color:var(--red)">${fmt.num(grandUnpaid)}</b>원`;
 }
 Views.invoices = function(){
-  const years = [...new Set(State.contracts.map(c=>c.year))].sort().reverse();
   const {html, grandIssued, grandUnpaid} = _invHtml();
   document.getElementById('content').innerHTML = `
     <div class="toolbar sticky-toolbar">
       <input type="search" id="inv-search" placeholder="계약번호·계약명·업체명 검색" value="${esc(invFilter.q)}" oninput="searchInput(event,'inv')" style="width:200px">
-      <select onchange="invFilter.year=this.value;_renderInvoices()">
-        <option value="">대상년도 전체</option>
-        ${years.map(y=>`<option ${invFilter.year===y?'selected':''}>${y}</option>`).join('')}
+      <select onchange="invFilter.year=this.value;_renderInvoices()" title="세금계산서 발행일 기준 연도로 필터링 및 합계 집계">
+        <option value="">발행년도 전체</option>
+        ${[...new Set(State.invoices.filter(v=>v.issueDate).map(v=>v.issueDate.slice(0,4)))].sort().reverse().map(y=>`<option value="${y}" ${invFilter.year===y?'selected':''}>${y}년 발행분</option>`).join('')}
       </select>
       <select onchange="invFilter.typeCode=this.value;_renderInvoices()">
         <option value="">사업본부 전체</option>
@@ -2073,21 +2187,20 @@ const SupaAuth = {
     if(!confirm('로그아웃 하시겠습니까?'))return;
     stopRealtime();
     await supa.auth.signOut();
+    localStorage.removeItem('ensign_pin_session');
     _supaUser=null;_supaProfile=null;
-    localStorage.removeItem('ensign_local_user');
-    localStorage.setItem('ensign_pin_fail','0');
-    document.getElementById('app-screen').style.display='none';
-    document.getElementById('login-screen').style.display='flex';
-    PinAuth.showPinLogin();
+    // 로그아웃 시 최신 버전 강제 로드 (캐시 무시)
+    location.href = location.pathname + '?t=' + Date.now();
   }
 };
 
 /* ===== SupaDB — 데이터 저장/로드 ===== */
+function _toDateOnly(v){ if(!v) return v; var s=String(v); return s.length>10 ? s.slice(0,10) : s; }
 const _conv={
   ctTo:function(c){return{id:c.id,no:c.no,year:c.year,type_code:c.typeCode,name:c.name,client:c.client,supply:c.supply||0,vat:c.vat||0,toe:c.toe||null,grade:c.grade||null,pay_kinds:c.payKinds||[],manager:c.manager||null,contract_date:c.contractDate||null,memo:c.memo||null};},
   ctFrom:function(r){return{id:r.id,no:r.no,year:r.year,typeCode:r.type_code,name:r.name,client:r.client,supply:Number(r.supply||0),vat:Number(r.vat||0),toe:r.toe,grade:r.grade,payKinds:r.pay_kinds||[],manager:r.manager,contractDate:r.contract_date,memo:r.memo};},
   invTo:function(v){return{id:v.id,contract_id:v.contractId,kind:v.kind,issue_date:v.issueDate||null,supply:v.supply||0,vat:v.vat||0,paid:v.paid||false,paid_date:v.paidDate||null,memo:v.memo||null};},
-  invFrom:function(r){return{id:r.id,contractId:r.contract_id,kind:r.kind,issueDate:r.issue_date,supply:Number(r.supply||0),vat:Number(r.vat||0),paid:r.paid,paidDate:r.paid_date,memo:r.memo};},
+  invFrom:function(r){return{id:r.id,contractId:r.contract_id,kind:r.kind,issueDate:_toDateOnly(r.issue_date),supply:Number(r.supply||0),vat:Number(r.vat||0),paid:r.paid,paidDate:_toDateOnly(r.paid_date),memo:r.memo};},
   bankTo:function(b){return{id:b.id,date:b.date,bank_desc:b.desc||'',deposit:b.deposit||0,withdraw:b.withdraw||0,balance:b.balance||0,bank_name:b.bankName||'',memo:b.memo||null,match_invoice_id:b.matchInvoiceId||null};},
   bankFrom:function(r){return{id:r.id,date:r.date,desc:r.bank_desc,deposit:Number(r.deposit||0),withdraw:Number(r.withdraw||0),balance:Number(r.balance||0),bankName:r.bank_name,memo:r.memo,matchInvoiceId:r.match_invoice_id};},
   savTo:function(s){return{id:s.id,name:s.name,bank_name:s.bankName||'',monthly:s.monthly||0,start_date:s.startDate||null,maturity:s.maturity||null,payments:s.payments||[],memo:s.memo||null};},
@@ -2171,6 +2284,21 @@ State.saveAll=async function(){
     if(State.contracts.length){ jobs.push(supa.from('contracts').upsert(State.contracts.map(_conv.ctTo))); labels.push('contracts'); }
     if(State.invoices.length){  jobs.push(supa.from('invoices').upsert(State.invoices.map(_conv.invTo)));  labels.push('invoices'); }
     if(State.ediag.length){     jobs.push(supa.from('ediag').upsert(State.ediag.map(_conv.ediagTo)));      labels.push('ediag'); }
+    // 메모리(State)에서 삭제된 행이 Supabase에 남아있지 않도록 명시적으로 제거
+    // (팀 필터링 대상 사용자는 본인이 못 보는 데이터를 건드릴 수 없으므로 제외)
+    if(!isFiltered){
+      try{
+        var liveInvIds = new Set(State.invoices.map(function(v){return v.id;}));
+        var dbInvRes = await supa.from('invoices').select('id');
+        var orphanInvIds = (dbInvRes.data||[]).map(function(r){return r.id;}).filter(function(id){return !liveInvIds.has(id);});
+        if(orphanInvIds.length) jobs.push(supa.from('invoices').delete().in('id', orphanInvIds));
+
+        var liveCtIds = new Set(State.contracts.map(function(c){return c.id;}));
+        var dbCtRes = await supa.from('contracts').select('id');
+        var orphanCtIds = (dbCtRes.data||[]).map(function(r){return r.id;}).filter(function(id){return !liveCtIds.has(id);});
+        if(orphanCtIds.length) jobs.push(supa.from('contracts').delete().in('id', orphanCtIds));
+      }catch(e){ console.error('고아행 정리 오류:', e); }
+    }
     if(!isFiltered){
       if(State.bank.length){    jobs.push(supa.from('bank').upsert(State.bank.map(_conv.bankTo)));         labels.push('bank'); }
       if(State.savings.length){ jobs.push(supa.from('savings').upsert(State.savings.map(_conv.savTo)));    labels.push('savings'); }
@@ -2367,7 +2495,11 @@ const PinAuth={
       var profRes=await supa.from('staff_profiles').select('role,email').eq('name',stored.name);
       if(profRes.data&&profRes.data.length>0){stored.role=profRes.data[0].role||stored.role;}
       this._localUser=stored;
+      // 새로고침 시 PIN 재입력 없이 유지되도록 세션 토큰 저장 (2시간)
+      localStorage.setItem('ensign_pin_session', JSON.stringify({user:stored, expires:Date.now()+2*60*60*1000}));
       SupaAuth.onLoginWithProfile(stored);
+      // 로그인 시점에도 최신 버전인지 확인
+      setTimeout(function(){ if(typeof Updater!=='undefined') Updater.checkAutoReload(); }, 3000);
     } else {
       var newFail=failCount+1;localStorage.setItem('ensign_pin_fail',String(newFail));
       if(newFail>=5) localStorage.setItem('ensign_pin_lock',String(Date.now()));
@@ -2412,6 +2544,41 @@ const PinAuth={
 
 /* ===== 자동 업데이트 ===== */
 const Updater={
+  _checking:false,
+  // 현재 로드된 index.html과 서버의 index.html을 비교해서 변경 감지
+  async checkAutoReload(){
+    if(Updater._checking) return;
+    Updater._checking = true;
+    try{
+      var res = await fetch(location.pathname + '?_chk=' + Date.now(), {cache:'no-store'});
+      if(!res.ok) return;
+      var html = await res.text();
+      var serverHash = Updater._simpleHash(html);
+      var storedHash = sessionStorage.getItem('ensign_page_hash');
+      if(!storedHash){
+        sessionStorage.setItem('ensign_page_hash', serverHash);
+        return;
+      }
+      if(serverHash !== storedHash){
+        // 새 버전 감지 → 작업 중 데이터가 없을 때만 조용히 새로고침, 있으면 안내 후 새로고침
+        Updater._showReloadNotice();
+      }
+    }catch(e){ /* 네트워크 오류 시 무시 */ }
+    finally{ Updater._checking = false; }
+  },
+  _simpleHash(str){
+    var h=0; for(var i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h=h&h; }
+    return String(h);
+  },
+  _noticeShown:false,
+  _showReloadNotice(){
+    if(Updater._noticeShown) return;
+    Updater._noticeShown = true;
+    var bar = document.createElement('div');
+    bar.style.cssText='position:fixed;top:0;left:0;right:0;background:#0e5e54;color:#fff;padding:10px 16px;text-align:center;font-size:13px;font-weight:600;z-index:99999;box-shadow:0 2px 8px rgba(0,0,0,.2)';
+    bar.innerHTML='🔄 새 버전이 적용되었습니다. <button onclick="location.href=location.pathname+\'?t=\'+Date.now()" style="margin-left:10px;background:#fff;color:#0e5e54;border:none;border-radius:5px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer">지금 새로고침</button>';
+    document.body.appendChild(bar);
+  },
   async check(silent){
     try{
       var res=await fetch(UPDATE_URL+'?t='+Date.now());
@@ -2444,17 +2611,9 @@ Views.settings=function(){
   content.appendChild(card);
 };
 
-/* ===== 초기 실행 ===== */
-(async function(){
-  try{
-    var session=(await supa.auth.getSession()).data.session;
-    if(session){await SupaAuth.onLogin(session.user);}
-    else{await PinAuth.init();}
-  }catch(e){console.error('초기화 오류:',e);PinAuth.init();}
-})();
+
 </script>
 </body>
-</html>
 <script>
 /* =====================================================
    인사관리 (hr) — Views.hr + HR 객체
@@ -3720,4 +3879,36 @@ window.EdiagMail = {
     toast('엑셀 다운로드 완료');
   }
 };
+/* ===== 초기 실행 ===== */
+(async function(){
+  try{
+    // 1) Supabase 이메일 세션 확인 (관리자용)
+    var session=(await supa.auth.getSession()).data.session;
+    if(session){await SupaAuth.onLogin(session.user);return;}
+
+    // 2) PIN 세션 유지 확인 (새로고침 시 재입력 방지, 8시간 유효)
+    var pinSession=null;
+    try{ pinSession=JSON.parse(localStorage.getItem('ensign_pin_session')||'null'); }catch(e){}
+    if(pinSession && pinSession.expires>Date.now() && pinSession.user){
+      await SupaAuth.onLoginWithProfile(pinSession.user);
+      return;
+    }
+    localStorage.removeItem('ensign_pin_session');
+
+    // 3) 둘 다 없으면 PIN 로그인 화면
+    await PinAuth.init();
+  }catch(e){console.error('초기화 오류:',e);PinAuth.init();}
+
+  // 페이지 최초 로드 시 현재 버전 해시 저장 + 5분마다 새 버전 자동 감지
+  try{
+    var res0 = await fetch(location.pathname + '?_chk0=' + Date.now(), {cache:'no-store'});
+    if(res0.ok){
+      var html0 = await res0.text();
+      sessionStorage.setItem('ensign_page_hash', Updater._simpleHash(html0));
+    }
+  }catch(e){}
+  setInterval(function(){ Updater.checkAutoReload(); }, 5*60*1000);
+})();
 </script>
+</body>
+</html>
