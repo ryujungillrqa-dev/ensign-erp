@@ -2435,9 +2435,11 @@ const PinAuth={
       var profRes=await supa.from('staff_profiles').select('role,email').eq('name',stored.name);
       if(profRes.data&&profRes.data.length>0){stored.role=profRes.data[0].role||stored.role;}
       this._localUser=stored;
-      // 새로고침 시 PIN 재입력 없이 유지되도록 세션 토큰 저장 (8시간)
+      // 새로고침 시 PIN 재입력 없이 유지되도록 세션 토큰 저장 (2시간)
       localStorage.setItem('ensign_pin_session', JSON.stringify({user:stored, expires:Date.now()+2*60*60*1000}));
       SupaAuth.onLoginWithProfile(stored);
+      // 로그인 시점에도 최신 버전인지 확인
+      setTimeout(function(){ if(typeof Updater!=='undefined') Updater.checkAutoReload(); }, 3000);
     } else {
       var newFail=failCount+1;localStorage.setItem('ensign_pin_fail',String(newFail));
       if(newFail>=5) localStorage.setItem('ensign_pin_lock',String(Date.now()));
@@ -2482,6 +2484,41 @@ const PinAuth={
 
 /* ===== 자동 업데이트 ===== */
 const Updater={
+  _checking:false,
+  // 현재 로드된 index.html과 서버의 index.html을 비교해서 변경 감지
+  async checkAutoReload(){
+    if(Updater._checking) return;
+    Updater._checking = true;
+    try{
+      var res = await fetch(location.pathname + '?_chk=' + Date.now(), {cache:'no-store'});
+      if(!res.ok) return;
+      var html = await res.text();
+      var serverHash = Updater._simpleHash(html);
+      var storedHash = sessionStorage.getItem('ensign_page_hash');
+      if(!storedHash){
+        sessionStorage.setItem('ensign_page_hash', serverHash);
+        return;
+      }
+      if(serverHash !== storedHash){
+        // 새 버전 감지 → 작업 중 데이터가 없을 때만 조용히 새로고침, 있으면 안내 후 새로고침
+        Updater._showReloadNotice();
+      }
+    }catch(e){ /* 네트워크 오류 시 무시 */ }
+    finally{ Updater._checking = false; }
+  },
+  _simpleHash(str){
+    var h=0; for(var i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h=h&h; }
+    return String(h);
+  },
+  _noticeShown:false,
+  _showReloadNotice(){
+    if(Updater._noticeShown) return;
+    Updater._noticeShown = true;
+    var bar = document.createElement('div');
+    bar.style.cssText='position:fixed;top:0;left:0;right:0;background:#0e5e54;color:#fff;padding:10px 16px;text-align:center;font-size:13px;font-weight:600;z-index:99999;box-shadow:0 2px 8px rgba(0,0,0,.2)';
+    bar.innerHTML='🔄 새 버전이 적용되었습니다. <button onclick="location.href=location.pathname+\'?t=\'+Date.now()" style="margin-left:10px;background:#fff;color:#0e5e54;border:none;border-radius:5px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer">지금 새로고침</button>';
+    document.body.appendChild(bar);
+  },
   async check(silent){
     try{
       var res=await fetch(UPDATE_URL+'?t='+Date.now());
@@ -3801,6 +3838,16 @@ window.EdiagMail = {
     // 3) 둘 다 없으면 PIN 로그인 화면
     await PinAuth.init();
   }catch(e){console.error('초기화 오류:',e);PinAuth.init();}
+
+  // 페이지 최초 로드 시 현재 버전 해시 저장 + 5분마다 새 버전 자동 감지
+  try{
+    var res0 = await fetch(location.pathname + '?_chk0=' + Date.now(), {cache:'no-store'});
+    if(res0.ok){
+      var html0 = await res0.text();
+      sessionStorage.setItem('ensign_page_hash', Updater._simpleHash(html0));
+    }
+  }catch(e){}
+  setInterval(function(){ Updater.checkAutoReload(); }, 5*60*1000);
 })();
 </script>
 </body>
