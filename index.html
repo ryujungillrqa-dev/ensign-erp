@@ -457,9 +457,9 @@ Views.dash = function(){
   const totalAmt = cts.reduce((s,c)=>s+(Number(c.supply)||0),0); // 계약금액 = 공급가액(VAT 제외)
   // 세금계산서 발행/미수/입금 합계: 발행일자(issueDate)의 연도 기준 (계약 대상년도와 무관)
   const issued   = State.invoices.filter(v=>v.issueDate && (!dashYear || v.issueDate.slice(0,4)===dashYear));
-  const issuedAmt= issued.reduce((s,v)=>s+invoiceTotal(v),0);
+  const issuedAmt= issued.reduce((s,v)=>s+(Number(v.supply)||0),0); // 공급가액(VAT 제외)
   const unpaid   = issued.filter(v=>!v.paid);
-  const unpaidAmt= unpaid.reduce((s,v)=>s+invoiceTotal(v),0);
+  const unpaidAmt= unpaid.reduce((s,v)=>s+(Number(v.supply)||0),0); // 공급가액(VAT 제외)
   const paidAmt  = issuedAmt - unpaidAmt;
   const bankBalMap = calcBankBalances();
   const bankBal    = Object.values(bankBalMap).reduce((s,v)=>s+v.balance,0);
@@ -487,7 +487,7 @@ Views.dash = function(){
   State.contracts.forEach(c=>{ ctIdToType[c.id]=c.typeCode; });
   issued.forEach(v=>{
     const tc = ctIdToType[v.contractId];
-    if(tc && byType[tc]) byType[tc].issuedAmt += invoiceTotal(v);
+    if(tc && byType[tc]) byType[tc].issuedAmt += (Number(v.supply)||0); // 공급가액(VAT 제외)
   });
   const typeRows = Object.keys(TYPE_CODES).filter(k=>byType[k].cnt>0||true).map(k=>`
     <tr>
@@ -516,8 +516,8 @@ Views.dash = function(){
     const ctAmt = ycts.reduce((s,c)=>s+(Number(c.supply)||0),0);
     // 발행금액: 세금계산서 '발행일자'의 연도(y) 기준 (계약 대상년도와 무관)
     const invs  = State.invoices.filter(v=>v.issueDate && v.issueDate.slice(0,4)===y);
-    const invAmt= invs.reduce((s,v)=>s+invoiceTotal(v),0);
-    const paid  = invs.filter(v=>v.paid).reduce((s,v)=>s+invoiceTotal(v),0);
+    const invAmt= invs.reduce((s,v)=>s+(Number(v.supply)||0),0); // 공급가액(VAT 제외) — 월별 비교와 합계 일치
+    const paid  = invs.filter(v=>v.paid).reduce((s,v)=>s+(Number(v.supply)||0),0); // 공급가액(VAT 제외)
     const unpaid= invAmt - paid;
     return { y, ctAmt, invAmt, paid, unpaid, cnt:ycts.length };
   });
@@ -535,8 +535,21 @@ Views.dash = function(){
     });
     return arr;
   }
-  const ctMonthCur   = monthlyAmtByDate('contractDate', State.contracts, c=>(Number(c.supply)||0), curYear); // 공급가액(VAT 제외)
-  const ctMonthPrev  = monthlyAmtByDate('contractDate', State.contracts, c=>(Number(c.supply)||0), prevYear); // 공급가액(VAT 제외)
+  // 계약금액: '최근 3개년 비교'와 동일하게 계약 대상년도(c.year) 기준으로 연도 매칭.
+  // 월 배치는 계약체결일(contractDate)이 있으면 그 월, 없으면 1월에 합산 (연도 합계는 항상 3개년 비교와 일치)
+  function monthlyCtByYear(year){
+    const arr = Array(12).fill(0);
+    State.contracts.filter(c=>c.year===year).forEach(c=>{
+      const amt = Number(c.supply)||0;
+      const d = c.contractDate;
+      let m = 0;
+      if(d && d.slice(0,4)===year){ const mm = parseInt(d.slice(5,7),10)-1; if(mm>=0&&mm<12) m=mm; }
+      arr[m]+=amt;
+    });
+    return arr;
+  }
+  const ctMonthCur   = monthlyCtByYear(curYear);  // 공급가액(VAT 제외), 3개년 비교와 합계 일치
+  const ctMonthPrev  = monthlyCtByYear(prevYear); // 공급가액(VAT 제외), 3개년 비교와 합계 일치
   const invMonthCur  = monthlyAmtByDate('issueDate', State.invoices, v=>(Number(v.supply)||0), curYear); // 공급가액(VAT 제외)
   const invMonthPrev = monthlyAmtByDate('issueDate', State.invoices, v=>(Number(v.supply)||0), prevYear); // 공급가액(VAT 제외)
 
