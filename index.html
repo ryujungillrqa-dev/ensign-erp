@@ -454,7 +454,7 @@ Views.dash = function(){
   if(dashYear && dashYear !== '' && !allYears.includes(dashYear)) dashYear = allYears[0] || '';
   // 계약금액 합계: 계약의 대상년도(dashYear) 기준
   const cts = dashYear ? State.contracts.filter(c=>c.year===dashYear) : State.contracts;
-  const totalAmt = cts.reduce((s,c)=>s+(Number(c.supply)||0)+(Number(c.vat)||0),0);
+  const totalAmt = cts.reduce((s,c)=>s+(Number(c.supply)||0),0); // 계약금액 = 공급가액(VAT 제외)
   // 세금계산서 발행/미수/입금 합계: 발행일자(issueDate)의 연도 기준 (계약 대상년도와 무관)
   const issued   = State.invoices.filter(v=>v.issueDate && (!dashYear || v.issueDate.slice(0,4)===dashYear));
   const issuedAmt= issued.reduce((s,v)=>s+invoiceTotal(v),0);
@@ -481,7 +481,7 @@ Views.dash = function(){
   /* 구분별 */
   const byType = {};
   Object.keys(TYPE_CODES).forEach(k=>byType[k]={cnt:0,amt:0,issuedAmt:0});
-  cts.forEach(c=>{ if(byType[c.typeCode]){ byType[c.typeCode].cnt++; byType[c.typeCode].amt+=(Number(c.supply)||0)+(Number(c.vat)||0); } });
+  cts.forEach(c=>{ if(byType[c.typeCode]){ byType[c.typeCode].cnt++; byType[c.typeCode].amt+=(Number(c.supply)||0); } }); // 공급가액(VAT 제외)
   // 사업본부별 계산서 발행금액: '발행일 기준 연도(issued)'에 속한 세금계산서를 계약의 사업본부로 집계
   const ctIdToType = {};
   State.contracts.forEach(c=>{ ctIdToType[c.id]=c.typeCode; });
@@ -504,17 +504,18 @@ Views.dash = function(){
   const recentRows = recent.map(c=>`
     <tr>
       <td>${esc(c.no)}</td><td>${esc(c.name)}</td><td>${esc(c.client)}</td>
-      <td class="num">${fmt.money((Number(c.supply)||0)+(Number(c.vat)||0))}</td>
+      <td class="num">${fmt.money(Number(c.supply)||0)}</td>
     </tr>`).join('') || '<tr><td colspan="4"><div class="empty">등록된 계약이 없습니다</div></td></tr>';
 
   /* 과거 3개년 데이터 (현재 선택 년도 기준으로 최근 3년) */
   const baseYear = dashYear ? parseInt(dashYear) : new Date().getFullYear();
   const chart3Years = [baseYear-2, baseYear-1, baseYear].map(String);
   const yearStats = chart3Years.map(y=>{
+    // 계약금액: 계약의 대상년도(y) 기준, 공급가액(VAT 제외)
     const ycts  = State.contracts.filter(c=>c.year===y);
-    const yIds  = new Set(ycts.map(c=>c.id));
-    const ctAmt = ycts.reduce((s,c)=>s+(Number(c.supply)||0)+(Number(c.vat)||0),0);
-    const invs  = State.invoices.filter(v=>v.issueDate && yIds.has(v.contractId));
+    const ctAmt = ycts.reduce((s,c)=>s+(Number(c.supply)||0),0);
+    // 발행금액: 세금계산서 '발행일자'의 연도(y) 기준 (계약 대상년도와 무관)
+    const invs  = State.invoices.filter(v=>v.issueDate && v.issueDate.slice(0,4)===y);
     const invAmt= invs.reduce((s,v)=>s+invoiceTotal(v),0);
     const paid  = invs.filter(v=>v.paid).reduce((s,v)=>s+invoiceTotal(v),0);
     const unpaid= invAmt - paid;
@@ -534,8 +535,8 @@ Views.dash = function(){
     });
     return arr;
   }
-  const ctMonthCur   = monthlyAmtByDate('contractDate', State.contracts, c=>(Number(c.supply)||0)+(Number(c.vat)||0), curYear);
-  const ctMonthPrev  = monthlyAmtByDate('contractDate', State.contracts, c=>(Number(c.supply)||0)+(Number(c.vat)||0), prevYear);
+  const ctMonthCur   = monthlyAmtByDate('contractDate', State.contracts, c=>(Number(c.supply)||0), curYear); // 공급가액(VAT 제외)
+  const ctMonthPrev  = monthlyAmtByDate('contractDate', State.contracts, c=>(Number(c.supply)||0), prevYear); // 공급가액(VAT 제외)
   const invMonthCur  = monthlyAmtByDate('issueDate', State.invoices, v=>invoiceTotal(v), curYear);
   const invMonthPrev = monthlyAmtByDate('issueDate', State.invoices, v=>invoiceTotal(v), prevYear);
 
