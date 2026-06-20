@@ -1462,7 +1462,7 @@ const Invoices = {
   importXlsx(input){
     const file = input.files[0]; if(!file) return;
     const reader = new FileReader();
-    reader.onload = e=>{
+    reader.onload = async e=>{
       try{
         const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
         const sheetName = wb.SheetNames.includes('세금계산서입력') ? '세금계산서입력' : wb.SheetNames[0];
@@ -1498,8 +1498,19 @@ const Invoices = {
           v.memo = get(['비고']) || v.memo;
           ok++;
         });
-        State.saveAll(); _renderInvoices();
-        let msg = ok+'건 처리 완료';
+        if(ok===0 && !errors.length){
+          toast('처리할 데이터가 없습니다');
+          input.value=''; return;
+        }
+        toast('저장 중...');
+        try{
+          await State.saveAll();
+        }catch(saveErr){
+          toast('❌ 저장 실패: '+saveErr.message+' (변경사항이 저장되지 않았습니다)');
+          input.value=''; return;
+        }
+        _renderInvoices();
+        let msg = '✅ '+ok+'건 저장 완료';
         if(errors.length) msg += ' · 건너뜀 '+errors.length+'건';
         toast(msg);
         if(errors.length) setTimeout(()=>alert('건너뛴 행:\n'+errors.join('\n')),300);
