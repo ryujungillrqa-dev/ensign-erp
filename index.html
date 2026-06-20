@@ -455,11 +455,14 @@ Views.dash = function(){
   // 계약금액 합계: 계약의 대상년도(dashYear) 기준
   const cts = dashYear ? State.contracts.filter(c=>c.year===dashYear) : State.contracts;
   const totalAmt = cts.reduce((s,c)=>s+(Number(c.supply)||0),0); // 계약금액 = 공급가액(VAT 제외)
+  const totalAmtVat = cts.reduce((s,c)=>s+(Number(c.supply)||0)+(Number(c.vat)||0),0); // 계약금액(부가세포함)
   // 세금계산서 발행/미수/입금 합계: 발행일자(issueDate)의 연도 기준 (계약 대상년도와 무관)
   const issued   = State.invoices.filter(v=>v.issueDate && (!dashYear || v.issueDate.slice(0,4)===dashYear));
   const issuedAmt= issued.reduce((s,v)=>s+(Number(v.supply)||0),0); // 공급가액(VAT 제외)
+  const issuedAmtVat = issued.reduce((s,v)=>s+(Number(v.supply)||0)+(Number(v.vat)||0),0); // 발행금액(부가세포함)
   const unpaid   = issued.filter(v=>!v.paid);
   const unpaidAmt= unpaid.reduce((s,v)=>s+(Number(v.supply)||0),0); // 공급가액(VAT 제외)
+  const unpaidAmtVat = unpaid.reduce((s,v)=>s+(Number(v.supply)||0)+(Number(v.vat)||0),0); // 미수금(부가세포함)
   const paidAmt  = issuedAmt - unpaidAmt;
   const bankBalMap = calcBankBalances();
   const bankBal    = Object.values(bankBalMap).reduce((s,v)=>s+v.balance,0);
@@ -480,14 +483,17 @@ Views.dash = function(){
 
   /* 구분별 */
   const byType = {};
-  Object.keys(TYPE_CODES).forEach(k=>byType[k]={cnt:0,amt:0,issuedAmt:0});
+  Object.keys(TYPE_CODES).forEach(k=>byType[k]={cnt:0,amt:0,issuedAmt:0,unpaidAmt:0});
   cts.forEach(c=>{ if(byType[c.typeCode]){ byType[c.typeCode].cnt++; byType[c.typeCode].amt+=(Number(c.supply)||0); } }); // 공급가액(VAT 제외)
-  // 사업본부별 계산서 발행금액: '발행일 기준 연도(issued)'에 속한 세금계산서를 계약의 사업본부로 집계
+  // 사업본부별 계산서 발행금액·미수금: '발행일 기준 연도(issued)'에 속한 세금계산서를 계약의 사업본부로 집계
   const ctIdToType = {};
   State.contracts.forEach(c=>{ ctIdToType[c.id]=c.typeCode; });
   issued.forEach(v=>{
     const tc = ctIdToType[v.contractId];
-    if(tc && byType[tc]) byType[tc].issuedAmt += (Number(v.supply)||0); // 공급가액(VAT 제외)
+    if(tc && byType[tc]){
+      byType[tc].issuedAmt += (Number(v.supply)||0); // 공급가액(VAT 제외)
+      if(!v.paid) byType[tc].unpaidAmt += (Number(v.supply)||0); // 미수금(부가세제외)
+    }
   });
   const typeRows = Object.keys(TYPE_CODES).filter(k=>byType[k].cnt>0||true).map(k=>`
     <tr>
@@ -495,17 +501,65 @@ Views.dash = function(){
       <td class="ctr">${byType[k].cnt}건</td>
       <td class="num">${fmt.money(byType[k].amt)}</td>
       <td class="num">${fmt.money(byType[k].issuedAmt)}</td>
+      <td class="num" style="color:${byType[k].unpaidAmt>0?'var(--red)':'inherit'}">${fmt.money(byType[k].unpaidAmt)}</td>
     </tr>`).join('');
+
+  /* 사업본부별 계약금액 / 발행금액 원형그래프(도넛) */
+  const TYPE_COLORS = { '01':'#4caf7d', '02':'#42a5f5', '03':'#ffa726', '04':'#ab47bc', '05':'#90a4ae' };
+  function donutChart(title, dataMap, valueKey){
+    const keys = Object.keys(TYPE_CODES).filter(k=>dataMap[k][valueKey]>0);
+    const total = keys.reduce((s,k)=>s+dataMap[k][valueKey],0);
+    const W=220, H=220, cx=W/2, cy=H/2, r=98, rInner=56;
+    if(total<=0){
+      return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--ink3);font-size:12px">
+        <div style="font-weight:700;margin-bottom:6px">${title}</div>데이터 없음</div>`;
+    }
+    let angle = -90; // 12시 방향부터 시작
+    let paths = '';
+    let legend = '';
+    keys.forEach(k=>{
+      const val = dataMap[k][valueKey];
+      const pct = val/total*100;
+      const sweep = pct/100*360;
+      const a1 = angle*Math.PI/180;
+      const a2 = (angle+sweep)*Math.PI/180;
+      const x1o=cx+r*Math.cos(a1), y1o=cy+r*Math.sin(a1);
+      const x2o=cx+r*Math.cos(a2), y2o=cy+r*Math.sin(a2);
+      const x1i=cx+rInner*Math.cos(a1), y1i=cy+rInner*Math.sin(a1);
+      const x2i=cx+rInner*Math.cos(a2), y2i=cy+rInner*Math.sin(a2);
+      const large = sweep>180?1:0;
+      paths += `<path d="M${x1o},${y1o} A${r},${r} 0 ${large} 1 ${x2o},${y2o} L${x2i},${y2i} A${rInner},${rInner} 0 ${large} 0 ${x1i},${y1i} Z" fill="${TYPE_COLORS[k]}" stroke="#fff" stroke-width="1.5"/>`;
+      // 비율(%)을 도넛 조각 중간 지점에 직접 표시 (조각이 너무 작으면(5% 미만) 생략해 겹침 방지)
+      if(pct>=5){
+        const midAngle = (angle+sweep/2)*Math.PI/180;
+        const rLabel = (r+rInner)/2;
+        const lx = cx+rLabel*Math.cos(midAngle), ly = cy+rLabel*Math.sin(midAngle);
+        paths += `<text x="${lx}" y="${ly+3.5}" text-anchor="middle" font-size="11" font-weight="800" fill="#fff" style="paint-order:stroke;stroke:rgba(0,0,0,0.25);stroke-width:2px">${pct.toFixed(0)}%</text>`;
+      }
+      legend += `<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink2);margin-bottom:6px">
+        <span style="width:10px;height:10px;background:${TYPE_COLORS[k]};border-radius:2px;display:inline-block;flex:none"></span>
+        <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${TYPE_CODES[k]}</span>
+      </div>`;
+      angle += sweep;
+    });
+    return `<div style="display:flex;flex-direction:column;height:100%">
+      <div style="font-size:12px;font-weight:700;color:var(--ink);margin-bottom:4px;text-align:center">${title}</div>
+      <div style="display:flex;align-items:center;flex:1;gap:10px">
+        <svg viewBox="0 0 ${W} ${H}" style="width:170px;height:170px;flex:none">
+          ${paths}
+          <text x="${cx}" y="${cy-3}" text-anchor="middle" font-size="13" font-weight="800" fill="var(--ink)">${fmt.money(total)}</text>
+          <text x="${cx}" y="${cy+14}" text-anchor="middle" font-size="10" fill="var(--ink3)">원</text>
+        </svg>
+        <div style="flex:1;min-width:0">${legend}</div>
+      </div>
+    </div>`;
+  }
+  const ctDonut  = donutChart('계약금액 비율', byType, 'amt');
+  const invDonut = donutChart('발행금액 비율', byType, 'issuedAmt');
 
   /* 년도별 비교: 3개년 그래프로 대체됨 */
 
-  /* 최근 계약 */
-  const recent = cts.slice().sort((a,b)=>(b.contractDate||'').localeCompare(a.contractDate||'')).slice(0,6);
-  const recentRows = recent.map(c=>`
-    <tr>
-      <td>${esc(c.no)}</td><td>${esc(c.name)}</td><td>${esc(c.client)}</td>
-      <td class="num">${fmt.money(Number(c.supply)||0)}</td>
-    </tr>`).join('') || '<tr><td colspan="4"><div class="empty">등록된 계약이 없습니다</div></td></tr>';
+  /* 최근 계약 카드는 삭제됨 */
 
   /* 과거 3개년 데이터 (현재 선택 년도 기준으로 최근 3년) */
   const baseYear = dashYear ? parseInt(dashYear) : new Date().getFullYear();
@@ -579,7 +633,7 @@ Views.dash = function(){
       const color = ai===0?curColor:prevColor;
       arr.forEach((v,i)=>{ const [x,y]=pt(arr,i); dots+=`<circle cx="${x}" cy="${y}" r="2.5" fill="${color}"/>`; });
     });
-    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:100%;min-height:170px">
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%;min-height:170px">
       <text x="${W/2}" y="13" text-anchor="middle" font-size="11" fill="#1c2733" font-weight="700">${title}</text>
       ${ylabels}
       <path d="${pathOf(prevArr)}" fill="none" stroke="${prevColor}" stroke-width="2" stroke-dasharray="4,3"/>
@@ -635,26 +689,26 @@ Views.dash = function(){
   const invCumPrev  = toCumulative(invMonthPrev);
 
   /* 세로형(월이 행) 비교표: 금액은 '해당월 실적', 증감율은 '1월~해당월 누적' 기준 */
-  const CT_BG  = '#eef5f0';  // 계약금액 영역 파스텔(연그린)
-  const INV_BG = '#eef2fa';  // 발행금액 영역 파스텔(연블루)
+  const CT_BG  = '#f6faf7';  // 계약금액 영역 파스텔(더 흐린 연그린)
+  const INV_BG = '#f6f8fc';  // 발행금액 영역 파스텔(더 흐린 연블루)
   const cumTableRows = [...Array(12)].map((_,i)=>{
     const m = i+1;
     const ctMc=ctMonthCur[i], ctMp=ctMonthPrev[i];   // 해당월 실적
     const ivMc=invMonthCur[i], ivMp=invMonthPrev[i]; // 해당월 실적
     const ctCv=ctCumCur[i],  ctPv=ctCumPrev[i];      // 누적(증감율용)
     const ivCv=invCumCur[i], ivPv=invCumPrev[i];     // 누적(증감율용)
-    const ctChg = ctPv ? chgBadge(ctCv, ctPv) : '<span style="color:var(--ink3);font-size:10px">-</span>';
-    const ivChg = ivPv ? chgBadge(ivCv, ivPv) : '<span style="color:var(--ink3);font-size:10px">-</span>';
+    const ctChg = ctPv ? chgBadge(ctCv, ctPv) : '<span style="color:var(--ink3);font-size:9.5px">-</span>';
+    const ivChg = ivPv ? chgBadge(ivCv, ivPv) : '<span style="color:var(--ink3);font-size:9.5px">-</span>';
     const isCurMonth = (baseYear===new Date().getFullYear() && m===new Date().getMonth()+1);
     const hi = isCurMonth ? 'box-shadow:inset 0 0 0 1.5px var(--brand);' : '';
     return `<tr>
-      <td class="ctr" style="font-weight:700;font-size:11px;padding:3px 6px;${hi}">${m}월</td>
-      <td class="num" style="background:${CT_BG};font-size:11px;padding:3px 6px">${ctMp?fmt.money(ctMp):'-'}</td>
-      <td class="num" style="background:${CT_BG};font-size:11px;font-weight:600;padding:3px 6px">${ctMc?fmt.money(ctMc):'-'}</td>
-      <td class="num" style="background:${CT_BG};padding:3px 6px">${ctChg}</td>
-      <td class="num" style="background:${INV_BG};font-size:11px;padding:3px 6px">${ivMp?fmt.money(ivMp):'-'}</td>
-      <td class="num" style="background:${INV_BG};font-size:11px;font-weight:600;padding:3px 6px">${ivMc?fmt.money(ivMc):'-'}</td>
-      <td class="num" style="background:${INV_BG};padding:3px 6px">${ivChg}</td>
+      <td class="ctr" style="font-weight:700;font-size:10px;padding:1px 5px;${hi}">${m}월</td>
+      <td class="num" style="background:${CT_BG};font-size:10px;padding:1px 5px">${ctMp?fmt.money(ctMp):'-'}</td>
+      <td class="num" style="background:${CT_BG};font-size:10px;font-weight:600;padding:1px 5px">${ctMc?fmt.money(ctMc):'-'}</td>
+      <td class="num" style="background:${CT_BG};padding:1px 5px">${ctChg}</td>
+      <td class="num" style="background:${INV_BG};font-size:10px;padding:1px 5px">${ivMp?fmt.money(ivMp):'-'}</td>
+      <td class="num" style="background:${INV_BG};font-size:10px;font-weight:600;padding:1px 5px">${ivMc?fmt.money(ivMc):'-'}</td>
+      <td class="num" style="background:${INV_BG};padding:1px 5px">${ivChg}</td>
     </tr>`;
   }).join('');
 
@@ -662,18 +716,67 @@ Views.dash = function(){
   const cumTotalRow = (function(){
     const ctSum=ctMonthCur.reduce((a,b)=>a+b,0), ctSumP=ctMonthPrev.reduce((a,b)=>a+b,0);
     const ivSum=invMonthCur.reduce((a,b)=>a+b,0), ivSumP=invMonthPrev.reduce((a,b)=>a+b,0);
-    const ctChgT = ctSumP ? chgBadge(ctSum, ctSumP) : '<span style="color:var(--ink3);font-size:10px">-</span>';
-    const ivChgT = ivSumP ? chgBadge(ivSum, ivSumP) : '<span style="color:var(--ink3);font-size:10px">-</span>';
+    const ctChgT = ctSumP ? chgBadge(ctSum, ctSumP) : '<span style="color:var(--ink3);font-size:9.5px">-</span>';
+    const ivChgT = ivSumP ? chgBadge(ivSum, ivSumP) : '<span style="color:var(--ink3);font-size:9.5px">-</span>';
     return `<tr style="border-top:2px solid var(--line)">
-      <td class="ctr" style="font-weight:800;font-size:11px;padding:3px 6px">합계</td>
-      <td class="num" style="background:${CT_BG};font-size:11px;padding:3px 6px">${fmt.money(ctSumP)}</td>
-      <td class="num" style="background:${CT_BG};font-size:11px;font-weight:800;padding:3px 6px">${fmt.money(ctSum)}</td>
-      <td class="num" style="background:${CT_BG};padding:3px 6px">${ctChgT}</td>
-      <td class="num" style="background:${INV_BG};font-size:11px;padding:3px 6px">${fmt.money(ivSumP)}</td>
-      <td class="num" style="background:${INV_BG};font-size:11px;font-weight:800;padding:3px 6px">${fmt.money(ivSum)}</td>
-      <td class="num" style="background:${INV_BG};padding:3px 6px">${ivChgT}</td>
+      <td class="ctr" style="font-weight:800;font-size:10px;padding:1px 5px">합계</td>
+      <td class="num" style="background:${CT_BG};font-size:10px;padding:1px 5px">${fmt.money(ctSumP)}</td>
+      <td class="num" style="background:${CT_BG};font-size:10px;font-weight:800;padding:1px 5px">${fmt.money(ctSum)}</td>
+      <td class="num" style="background:${CT_BG};padding:1px 5px">${ctChgT}</td>
+      <td class="num" style="background:${INV_BG};font-size:10px;padding:1px 5px">${fmt.money(ivSumP)}</td>
+      <td class="num" style="background:${INV_BG};font-size:10px;font-weight:800;padding:1px 5px">${fmt.money(ivSum)}</td>
+      <td class="num" style="background:${INV_BG};padding:1px 5px">${ivChgT}</td>
     </tr>`;
   })();
+
+  /* 전년대비 달성률 막대그래프 (1월~12월, 누적 기준 = 표의 증감율과 동일 데이터)
+     100% 이상(전년 달성/초과) = 빨간색, 100% 미만(미달성) = 파란색, 불투명도 30% */
+  function achievementChart(title, curCumArr, prevCumArr){
+    const W=300, H=360, PL=34, PR=38, PT=2, PB=24; // 하단 여백을 늘려 범례와 명확히 분리
+    const rowH = (H-PT-PB)/12;
+    const barMaxW = W-PL-PR;
+    const RED  = 'rgba(220,53,69,0.3)';
+    const BLUE = 'rgba(40,108,223,0.3)';
+    const RED_LINE  = 'rgba(220,53,69,0.9)';
+    const BLUE_LINE = 'rgba(40,108,223,0.9)';
+    let bars = '';
+    for(let i=0;i<12;i++){
+      const cv = curCumArr[i], pv = prevCumArr[i];
+      const pct = pv ? (cv/pv*100) : (cv>0?100:0); // 전년 누적 대비 달성률(%)
+      const capped = Math.min(pct, 150); // 막대 길이는 150%에서 클램프(시각적 과도 방지)
+      const w = Math.max(barMaxW * (capped/150), 2);
+      const isAchieved = pv ? (cv>=pv) : (cv>0);
+      const fill = isAchieved ? RED : BLUE;
+      const line = isAchieved ? RED_LINE : BLUE_LINE;
+      const textColor = isAchieved ? '#dc3545' : '#286cdf';
+      const y = PT + i*rowH;
+      const cy = y + rowH/2;
+      // 막대 사이 간격을 좁혀 12개월이 한 화면에 더 빽빽하게 들어오도록 조정
+      const slotH0 = rowH * 0.96;
+      const barH0  = slotH0 / 1.12;  // 두께:간격 비율을 더 촘촘하게(간격을 줄임)
+      const barH   = barH0 * 0.70;
+      const barY   = cy - barH/2;
+      bars += `<text x="${PL-6}" y="${cy+4}" text-anchor="end" font-size="10" fill="#5b6b7b">${i+1}월</text>`;
+      bars += `<rect x="${PL}" y="${barY}" width="${barMaxW}" height="${barH}" fill="#f3f5f7" rx="3"/>`;
+      bars += `<rect x="${PL}" y="${barY}" width="${w}" height="${barH}" fill="${fill}" stroke="${line}" stroke-width="1.2" rx="3"/>`;
+      // 막대가 충분히 길면(공간 30px 이상) 막대 안쪽 우측에, 짧으면 막대 바깥 우측에 라벨 표시
+      const labelText = pct.toFixed(0)+'%';
+      if(w > 30){
+        bars += `<text x="${PL+w-6}" y="${cy+4}" text-anchor="end" font-size="9.5" fill="${textColor}" font-weight="700">${labelText}</text>`;
+      } else {
+        bars += `<text x="${PL+w+5}" y="${cy+4}" text-anchor="start" font-size="9.5" fill="${textColor}" font-weight="700">${labelText}</text>`;
+      }
+    }
+    // 100% 기준선 (라벨은 그래프 하단에 표시해 상단 잘림 방지)
+    const x100 = PL + barMaxW * (100/150);
+    bars += `<line x1="${x100}" y1="${PT}" x2="${x100}" y2="${H-PB+6}" stroke="#aab5b3" stroke-width="1" stroke-dasharray="3,3"/>`;
+    bars += `<text x="${x100}" y="${H-1}" text-anchor="middle" font-size="8" fill="#92a0ae">100%</text>`;
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%;display:block;margin:0 auto">
+      ${bars}
+    </svg>`;
+  }
+  const ctAchChart  = achievementChart('계약금액 달성률 (전년누적 대비)', ctCumCur, ctCumPrev);
+  const invAchChart = achievementChart('발행금액 달성률 (전년누적 대비)', invCumCur, invCumPrev);
   const statRowsNew = yearStats.map((s,i)=>{
     const bg = s.y===String(baseYear) ? 'background:var(--brand-soft);' : '';
     const fw = s.y===String(baseYear) ? 'font-weight:700;' : '';
@@ -707,10 +810,13 @@ Views.dash = function(){
     <!-- KPI -->
     <div class="kpis" style="grid-template-columns:repeat(4,minmax(0,1fr)) minmax(170px,1.1fr)">
       <div class="kpi a"><div class="lb">${yearLabel} 계약</div><div class="vl">${cts.length}<small> 건</small></div></div>
-      <div class="kpi b"><div class="lb">${yearLabel} 계약금액</div><div class="vl">${fmt.money(totalAmt)}<small> 원</small></div></div>
-      <div class="kpi e"><div class="lb">${yearLabel} 세금계산서발행금액</div><div class="vl">${fmt.money(issuedAmt)}<small> 원</small></div></div>
+      <div class="kpi b"><div class="lb">${yearLabel} 계약금액</div><div class="vl">${fmt.money(totalAmt)}<small> 원</small></div>
+        <div style="margin-top:4px;font-size:10.5px;color:var(--ink3)">부가세포함 ${fmt.money(totalAmtVat)}원</div></div>
+      <div class="kpi e"><div class="lb">${yearLabel} 세금계산서발행금액</div><div class="vl">${fmt.money(issuedAmt)}<small> 원</small></div>
+        <div style="margin-top:4px;font-size:10.5px;color:var(--ink3)">부가세포함 ${fmt.money(issuedAmtVat)}원</div></div>
       <div class="kpi c"><div class="lb">${yearLabel} 미수금</div>
-        <div class="vl" style="color:${unpaidAmt>0?'var(--red)':'inherit'}">${fmt.money(unpaidAmt)}<small> 원</small></div></div>
+        <div class="vl" style="color:${unpaidAmt>0?'var(--red)':'inherit'}">${fmt.money(unpaidAmt)}<small> 원</small></div>
+        <div style="margin-top:4px;font-size:10.5px;color:var(--ink3)">부가세포함 ${fmt.money(unpaidAmtVat)}원</div></div>
 
       <!-- 통장 잔액 합계 (단독 카드) -->
       <div class="kpi d" style="cursor:pointer" onclick="showBankBalModal()">
@@ -723,89 +829,62 @@ Views.dash = function(){
       </div>
     </div>
 
-    <!-- 구분별 + 최근계약 (1행으로) -->
-    <div style="display:grid;grid-template-columns:360px 1fr;gap:10px;margin-bottom:12px">
-      <!-- 사업본부별 현황 (계약금액 + 계산서발행금액) -->
-      <div class="card" style="margin:0">
-        <div class="hd" style="padding:10px 14px"><h2 style="font-size:13px">사업본부별 현황 (${yearLabel})</h2></div>
+    <!-- 사업본부별 현황 -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="hd" style="padding:10px 14px"><h2 style="font-size:13px">사업본부별 현황 (${yearLabel})</h2></div>
+      <div style="display:grid;grid-template-columns:1fr 300px 300px;gap:0">
         <div class="bd np">
           <table class="grid" style="font-size:12px">
-            <thead><tr><th>사업본부</th><th class="ctr">건수</th><th class="num">계약금액</th><th class="num">계산서발행금액</th></tr></thead>
+            <thead><tr><th>사업본부</th><th class="ctr">건수</th><th class="num">계약금액</th><th class="num">계산서발행금액</th><th class="num">미수금(부가세제외)</th></tr></thead>
             <tbody>${typeRows}</tbody>
           </table>
         </div>
-      </div>
-      <!-- 최근 계약 -->
-      <div class="card" style="margin:0">
-        <div class="hd" style="padding:10px 14px"><h2 style="font-size:13px">최근 계약 (${yearLabel})</h2><span class="sp"></span><a href="#contracts" class="btn sm">전체보기</a></div>
-        <div class="bd np">
-          <table class="grid" style="font-size:12px">
-            <thead><tr><th>계약번호</th><th>계약명</th><th>업체명</th><th class="num">금액</th></tr></thead>
-            <tbody>${recentRows}</tbody>
-          </table>
-        </div>
+        <div style="padding:12px 10px;border-left:1px solid var(--line2)">${ctDonut}</div>
+        <div style="padding:12px 10px;border-left:1px solid var(--line2)">${invDonut}</div>
       </div>
     </div>
 
-    <!-- 3개년 비교 표 + 직전년도 월별 누적비교 -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0">
-      <!-- 최근 3개년 비교 -->
-      <div class="card" style="margin:0;display:flex;flex-direction:column">
-        <div class="hd" style="padding:11px 16px"><h2>최근 3개년 비교 (${baseYear-2}~${baseYear}년)</h2></div>
-        <div style="padding:0 16px 14px">
-          <table class="grid" style="font-size:12px;max-width:480px">
+    <!-- 월별 비교 (세로형, 1월~12월 누적증감율) + 달성률 그래프 -->
+    <div class="card" style="margin-bottom:0;display:flex;flex-direction:column;height:38vh;max-height:380px;min-height:280px">
+      <div class="hd" style="padding:6px 16px;flex:none"><h2 style="font-size:13px">월별 비교 — ${curYear}년 vs ${prevYear}년 <span style="font-size:11px;color:var(--ink3);font-weight:500">(증감율은 1월~해당월 누적 기준 · 금액은 부가세 별도)</span></h2></div>
+      <div style="display:grid;grid-template-columns:1fr 280px 280px;gap:0;flex:1;min-height:0">
+        <div class="bd np" style="overflow-y:hidden;height:100%">
+          <table class="grid" style="font-size:11px;height:100%">
             <thead><tr>
-              <th class="ctr">년도</th><th class="ctr">계약수</th>
-              <th class="num">계약금액</th><th class="num">발행금액</th>
-            </tr></thead>
-            <tbody>${statRowsNew}</tbody>
-          </table>
-        </div>
-      </div>
-      <!-- 직전년도 월별 비교 -->
-      <div class="card" style="margin:0;display:flex;flex-direction:column">
-        <div class="hd" style="padding:11px 16px"><h2>월별 비교 — ${curYear}년 vs ${prevYear}년 <span style="font-size:11px;color:var(--ink3);font-weight:500">(증감율은 1월~해당월 누적 기준 · 금액은 부가세 별도)</span></h2></div>
-        <div class="bd np" style="flex:1;overflow-y:auto;max-height:420px">
-          <table class="grid" style="font-size:12px">
-            <thead><tr>
-              <th class="ctr" rowspan="2" style="vertical-align:middle;font-size:11px;padding:4px 6px">월</th>
-              <th class="ctr" colspan="3" style="background:#eef5f0;font-weight:800;font-size:11px;padding:4px 6px">계약금액</th>
-              <th class="ctr" colspan="3" style="background:#eef2fa;font-weight:800;font-size:11px;padding:4px 6px">발행금액</th>
+              <th class="ctr" rowspan="2" style="vertical-align:middle;font-size:10px;padding:2px 5px">월</th>
+              <th class="ctr" colspan="3" style="background:#eef5f0;font-weight:800;font-size:10px;padding:2px 5px">계약금액</th>
+              <th class="ctr" colspan="3" style="background:#eef2fa;font-weight:800;font-size:10px;padding:2px 5px">발행금액</th>
             </tr>
             <tr>
-              <th class="num" style="font-size:10.5px;background:#eef5f0;padding:3px 6px">${prevYear}년</th>
-              <th class="num" style="font-size:10.5px;background:#eef5f0;padding:3px 6px">${curYear}년</th>
-              <th class="num" style="font-size:10.5px;background:#eef5f0;padding:3px 6px">증감율</th>
-              <th class="num" style="font-size:10.5px;background:#eef2fa;padding:3px 6px">${prevYear}년</th>
-              <th class="num" style="font-size:10.5px;background:#eef2fa;padding:3px 6px">${curYear}년</th>
-              <th class="num" style="font-size:10.5px;background:#eef2fa;padding:3px 6px">증감율</th>
+              <th class="num" style="font-size:9.5px;background:#eef5f0;padding:1px 5px">${prevYear}년</th>
+              <th class="num" style="font-size:9.5px;background:#eef5f0;padding:1px 5px">${curYear}년</th>
+              <th class="num" style="font-size:9.5px;background:#eef5f0;padding:1px 5px">증감율</th>
+              <th class="num" style="font-size:9.5px;background:#eef2fa;padding:1px 5px">${prevYear}년</th>
+              <th class="num" style="font-size:9.5px;background:#eef2fa;padding:1px 5px">${curYear}년</th>
+              <th class="num" style="font-size:9.5px;background:#eef2fa;padding:1px 5px">증감율</th>
             </tr></thead>
-            <tbody style="line-height:1.1">${cumTableRows}${cumTotalRow}</tbody>
+            <tbody style="line-height:0.95">${cumTableRows}${cumTotalRow}</tbody>
           </table>
         </div>
+        <div style="border-left:1px solid var(--line2);height:100%;display:flex;flex-direction:column">
+          <div style="height:31px;flex:none;background:#f7f9fa;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:center">
+            <span style="font-size:11px;font-weight:800;color:var(--ink)">계약금액 달성률</span>
+          </div>
+          <div style="flex:1;min-height:0;padding:0 8px 10px;overflow:hidden;display:flex;align-items:stretch">${ctAchChart}</div>
+        </div>
+        <div style="border-left:1px solid var(--line2);height:100%;display:flex;flex-direction:column">
+          <div style="height:31px;flex:none;background:#f7f9fa;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:center">
+            <span style="font-size:11px;font-weight:800;color:var(--ink)">발행금액 달성률</span>
+          </div>
+          <div style="flex:1;min-height:0;padding:0 8px 10px;overflow:hidden;display:flex;align-items:stretch">${invAchChart}</div>
+        </div>
       </div>
-    </div>
-
-    <!-- 월별 비교 (전년 동월 대비) -->
-    <div class="card" style="margin-top:10px;margin-bottom:0">
-      <div class="hd" style="padding:11px 16px"><h2>월별 비교 — ${curYear}년 vs ${prevYear}년 <span style="font-size:11.5px;color:var(--ink3);font-weight:500">계약금액(계약일 기준) · 발행금액(발행일 기준) · 금액은 부가세 별도</span></h2></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
-        <div style="padding:10px 14px 6px;border-right:1px solid var(--line2)">${ctMonthChart}</div>
-        <div style="padding:10px 14px 6px">${invMonthChart}</div>
-      </div>
-      <div class="bd np" style="overflow-x:auto">
-        <table class="grid" style="font-size:11px;min-width:900px">
-          <thead><tr>
-            <th class="lbl" style="width:90px">구분</th>
-            ${[...Array(12)].map((_,i)=>`<th class="ctr">${i+1}월</th>`).join('')}
-          </tr></thead>
-          <tbody>
-            ${monthRow('계약금액('+curYear+')', ctMonthCur, ctMonthPrev)}
-            ${monthRow('발행금액('+curYear+')', invMonthCur, invMonthPrev)}
-            ${monthTotalRow('계약금액', ctMonthCur, ctMonthPrev)}
-            ${monthTotalRow('발행금액', invMonthCur, invMonthPrev)}
-          </tbody>
-        </table>
+      <div style="display:grid;grid-template-columns:1fr 560px">
+        <div></div>
+        <div style="padding:4px 12px 6px;font-size:10px;color:var(--ink3);display:flex;justify-content:center;gap:16px;border-top:1px solid var(--line2);flex:none">
+          <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:rgba(220,53,69,0.3);border:1px solid rgba(220,53,69,0.9);border-radius:2px;display:inline-block;flex:none"></span>전년대비 100% 이상 달성</span>
+          <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:rgba(40,108,223,0.3);border:1px solid rgba(40,108,223,0.9);border-radius:2px;display:inline-block;flex:none"></span>전년대비 미달성</span>
+        </div>
       </div>
     </div>
   `;
