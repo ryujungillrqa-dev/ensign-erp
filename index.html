@@ -117,6 +117,7 @@ table.grid td.ctr,table.grid th.ctr{text-align:center}
 .kpi.b{border-top:3px solid var(--blue)}
 .kpi.c{border-top:3px solid var(--amber)}
 .kpi.d{border-top:3px solid var(--green)}
+.kpi.e{border-top:3px solid #3a57c9}
 
 /* 더존식 세금계산서 그리드 */
 table.dz{width:100%;border-collapse:collapse;font-size:12.5px}
@@ -479,13 +480,21 @@ Views.dash = function(){
 
   /* 구분별 */
   const byType = {};
-  Object.keys(TYPE_CODES).forEach(k=>byType[k]={cnt:0,amt:0});
+  Object.keys(TYPE_CODES).forEach(k=>byType[k]={cnt:0,amt:0,issuedAmt:0});
   cts.forEach(c=>{ if(byType[c.typeCode]){ byType[c.typeCode].cnt++; byType[c.typeCode].amt+=(Number(c.supply)||0)+(Number(c.vat)||0); } });
+  // 사업본부별 계산서 발행금액: '발행일 기준 연도(issued)'에 속한 세금계산서를 계약의 사업본부로 집계
+  const ctIdToType = {};
+  State.contracts.forEach(c=>{ ctIdToType[c.id]=c.typeCode; });
+  issued.forEach(v=>{
+    const tc = ctIdToType[v.contractId];
+    if(tc && byType[tc]) byType[tc].issuedAmt += invoiceTotal(v);
+  });
   const typeRows = Object.keys(TYPE_CODES).filter(k=>byType[k].cnt>0||true).map(k=>`
     <tr>
       <td><span class="tag ${TYPE_TAG[k]}">${TYPE_CODES[k]}</span></td>
       <td class="ctr">${byType[k].cnt}건</td>
       <td class="num">${fmt.money(byType[k].amt)}</td>
+      <td class="num">${fmt.money(byType[k].issuedAmt)}</td>
     </tr>`).join('');
 
   /* 년도별 비교: 3개년 그래프로 대체됨 */
@@ -620,10 +629,10 @@ Views.dash = function(){
     </div>
 
     <!-- KPI -->
-    <div class="kpis" style="grid-template-columns:repeat(3,1fr) minmax(180px,1.2fr)">
-      <!-- 계약·계약금액·미수금 -->
+    <div class="kpis" style="grid-template-columns:repeat(4,minmax(0,1fr)) minmax(170px,1.1fr)">
       <div class="kpi a"><div class="lb">${yearLabel} 계약</div><div class="vl">${cts.length}<small> 건</small></div></div>
       <div class="kpi b"><div class="lb">${yearLabel} 계약금액</div><div class="vl">${fmt.money(totalAmt)}<small> 원</small></div></div>
+      <div class="kpi e"><div class="lb">${yearLabel} 세금계산서발행금액</div><div class="vl">${fmt.money(issuedAmt)}<small> 원</small></div></div>
       <div class="kpi c"><div class="lb">${yearLabel} 미수금</div>
         <div class="vl" style="color:${unpaidAmt>0?'var(--red)':'inherit'}">${fmt.money(unpaidAmt)}<small> 원</small></div></div>
 
@@ -636,36 +645,16 @@ Views.dash = function(){
         <div class="vl">${fmt.money(bankBal)}<small> 원</small></div>
         <div style="margin-top:6px;font-size:11px;color:var(--ink3)">${bankList.length}개 계좌 합산</div>
       </div>
-
-
     </div>
 
-    <!-- 발행현황 + 구분별 + 최근계약 (1행으로) -->
-    <div style="display:grid;grid-template-columns:180px 260px 1fr;gap:10px;margin-bottom:12px">
-      <!-- 발행/입금 현황 -->
-      <div class="card" style="margin:0;display:flex;flex-direction:column">
-        <div class="hd" style="padding:10px 14px"><h2 style="font-size:13px">${yearLabel} 발행현황</h2></div>
-        <div class="bd" style="flex:1;padding:0 14px;display:flex;flex-direction:column;justify-content:space-evenly">
-          <div style="padding:10px 0;border-bottom:1px solid var(--line2)">
-            <div style="font-size:11px;color:var(--ink2);font-weight:600;margin-bottom:4px">발행 완료</div>
-            <div style="font-size:16px;font-weight:800">${fmt.money(issuedAmt)}<span style="font-size:11px;color:var(--ink3)"> 원</span></div>
-          </div>
-          <div style="padding:10px 0;border-bottom:1px solid var(--line2)">
-            <div style="font-size:11px;color:var(--green);font-weight:600;margin-bottom:4px">입금 완료</div>
-            <div style="font-size:16px;font-weight:800;color:var(--green)">${fmt.money(paidAmt)}<span style="font-size:11px"> 원</span></div>
-          </div>
-          <div style="padding:10px 0">
-            <div style="font-size:11px;color:var(--red);font-weight:600;margin-bottom:4px">미수금</div>
-            <div style="font-size:16px;font-weight:800;color:${unpaidAmt>0?'var(--red)':'var(--ink)'}">${fmt.money(unpaidAmt)}<span style="font-size:11px"> 원</span></div>
-          </div>
-        </div>
-      </div>
-      <!-- 구분별 현황 -->
+    <!-- 구분별 + 최근계약 (1행으로) -->
+    <div style="display:grid;grid-template-columns:360px 1fr;gap:10px;margin-bottom:12px">
+      <!-- 사업본부별 현황 (계약금액 + 계산서발행금액) -->
       <div class="card" style="margin:0">
         <div class="hd" style="padding:10px 14px"><h2 style="font-size:13px">사업본부별 현황 (${yearLabel})</h2></div>
         <div class="bd np">
           <table class="grid" style="font-size:12px">
-            <thead><tr><th>사업본부</th><th class="ctr">건수</th><th class="num">계약금액</th></tr></thead>
+            <thead><tr><th>사업본부</th><th class="ctr">건수</th><th class="num">계약금액</th><th class="num">계산서발행금액</th></tr></thead>
             <tbody>${typeRows}</tbody>
           </table>
         </div>
