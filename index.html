@@ -537,8 +537,8 @@ Views.dash = function(){
   }
   const ctMonthCur   = monthlyAmtByDate('contractDate', State.contracts, c=>(Number(c.supply)||0), curYear); // 공급가액(VAT 제외)
   const ctMonthPrev  = monthlyAmtByDate('contractDate', State.contracts, c=>(Number(c.supply)||0), prevYear); // 공급가액(VAT 제외)
-  const invMonthCur  = monthlyAmtByDate('issueDate', State.invoices, v=>invoiceTotal(v), curYear);
-  const invMonthPrev = monthlyAmtByDate('issueDate', State.invoices, v=>invoiceTotal(v), prevYear);
+  const invMonthCur  = monthlyAmtByDate('issueDate', State.invoices, v=>(Number(v.supply)||0), curYear); // 공급가액(VAT 제외)
+  const invMonthPrev = monthlyAmtByDate('issueDate', State.invoices, v=>(Number(v.supply)||0), prevYear); // 공급가액(VAT 제외)
 
   /* 월별 비교 그래프 (계약금액 / 발행금액, 올해 vs 전년도) */
   function monthLineChart(curArr, prevArr, title, curColor, prevColor){
@@ -599,6 +599,16 @@ Views.dash = function(){
     }).join('');
     return `<tr><td class="lbl" style="white-space:nowrap;font-weight:600">${label}</td>${cells}</tr>`;
   }
+  // 가로형 월별표 맨 아래 합계 행 (1~12월 총합 + 전년대비 증감율, 합계 칼럼 수만큼 colspan)
+  function monthTotalRow(label, curArr, prevArr){
+    const curSum  = curArr.reduce((a,b)=>a+b,0);
+    const prevSum = prevArr.reduce((a,b)=>a+b,0);
+    const chg = prevSum ? chgBadge(curSum, prevSum) : '';
+    return `<tr style="border-top:2px solid var(--line)">
+      <td class="lbl" style="font-weight:800;color:var(--ink2)">${label} 합계</td>
+      <td class="num" colspan="12" style="font-weight:800;font-size:12px">${fmt.money(curSum)} <span style="font-size:10.5px;color:var(--ink3);font-weight:500">(전년 ${fmt.money(prevSum)})</span> ${chg}</td>
+    </tr>`;
+  }
 
   /* 월별 '누적' 배열 생성 (1월부터 해당월까지 합산) */
   function toCumulative(arr){
@@ -634,6 +644,23 @@ Views.dash = function(){
       <td class="num" style="background:${INV_BG}">${ivChg}</td>
     </tr>`;
   }).join('');
+
+  // 세로형(누적비교) 표 맨 아래 합계 행
+  const cumTotalRow = (function(){
+    const ctSum=ctMonthCur.reduce((a,b)=>a+b,0), ctSumP=ctMonthPrev.reduce((a,b)=>a+b,0);
+    const ivSum=invMonthCur.reduce((a,b)=>a+b,0), ivSumP=invMonthPrev.reduce((a,b)=>a+b,0);
+    const ctChgT = ctSumP ? chgBadge(ctSum, ctSumP) : '<span style="color:var(--ink3);font-size:10px">-</span>';
+    const ivChgT = ivSumP ? chgBadge(ivSum, ivSumP) : '<span style="color:var(--ink3);font-size:10px">-</span>';
+    return `<tr style="border-top:2px solid var(--line)">
+      <td class="ctr" style="font-weight:800">합계</td>
+      <td class="num" style="background:${CT_BG};font-size:11px">${fmt.money(ctSumP)}</td>
+      <td class="num" style="background:${CT_BG};font-size:11px;font-weight:800">${fmt.money(ctSum)}</td>
+      <td class="num" style="background:${CT_BG}">${ctChgT}</td>
+      <td class="num" style="background:${INV_BG};font-size:11px">${fmt.money(ivSumP)}</td>
+      <td class="num" style="background:${INV_BG};font-size:11px;font-weight:800">${fmt.money(ivSum)}</td>
+      <td class="num" style="background:${INV_BG}">${ivChgT}</td>
+    </tr>`;
+  })();
   const statRowsNew = yearStats.map((s,i)=>{
     const bg = s.y===String(baseYear) ? 'background:var(--brand-soft);' : '';
     const fw = s.y===String(baseYear) ? 'font-weight:700;' : '';
@@ -724,7 +751,7 @@ Views.dash = function(){
       </div>
       <!-- 직전년도 월별 비교 -->
       <div class="card" style="margin:0;display:flex;flex-direction:column">
-        <div class="hd" style="padding:11px 16px"><h2>월별 비교 — ${curYear}년 vs ${prevYear}년 <span style="font-size:11px;color:var(--ink3);font-weight:500">(증감율은 1월~해당월 누적 기준)</span></h2></div>
+        <div class="hd" style="padding:11px 16px"><h2>월별 비교 — ${curYear}년 vs ${prevYear}년 <span style="font-size:11px;color:var(--ink3);font-weight:500">(증감율은 1월~해당월 누적 기준 · 금액은 부가세 별도)</span></h2></div>
         <div class="bd np" style="flex:1;overflow-y:auto;max-height:420px">
           <table class="grid" style="font-size:12px">
             <thead><tr>
@@ -740,7 +767,7 @@ Views.dash = function(){
               <th class="num" style="font-size:10.5px;background:#eef2fa">${curYear}년</th>
               <th class="num" style="font-size:10.5px;background:#eef2fa">증감율</th>
             </tr></thead>
-            <tbody>${cumTableRows}</tbody>
+            <tbody>${cumTableRows}${cumTotalRow}</tbody>
           </table>
         </div>
       </div>
@@ -748,7 +775,7 @@ Views.dash = function(){
 
     <!-- 월별 비교 (전년 동월 대비) -->
     <div class="card" style="margin-top:10px;margin-bottom:0">
-      <div class="hd" style="padding:11px 16px"><h2>월별 비교 — ${curYear}년 vs ${prevYear}년 <span style="font-size:11.5px;color:var(--ink3);font-weight:500">계약금액(계약일 기준) · 발행금액(발행일 기준)</span></h2></div>
+      <div class="hd" style="padding:11px 16px"><h2>월별 비교 — ${curYear}년 vs ${prevYear}년 <span style="font-size:11.5px;color:var(--ink3);font-weight:500">계약금액(계약일 기준) · 발행금액(발행일 기준) · 금액은 부가세 별도</span></h2></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
         <div style="padding:10px 14px 6px;border-right:1px solid var(--line2)">${ctMonthChart}</div>
         <div style="padding:10px 14px 6px">${invMonthChart}</div>
@@ -762,6 +789,8 @@ Views.dash = function(){
           <tbody>
             ${monthRow('계약금액('+curYear+')', ctMonthCur, ctMonthPrev)}
             ${monthRow('발행금액('+curYear+')', invMonthCur, invMonthPrev)}
+            ${monthTotalRow('계약금액', ctMonthCur, ctMonthPrev)}
+            ${monthTotalRow('발행금액', invMonthCur, invMonthPrev)}
           </tbody>
         </table>
       </div>
