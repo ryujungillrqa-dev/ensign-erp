@@ -2608,6 +2608,12 @@ State.saveAll=async function(){
         var dbCtRes = await supa.from('contracts').select('id');
         var orphanCtIds = (dbCtRes.data||[]).map(function(r){return r.id;}).filter(function(id){return !liveCtIds.has(id);});
         if(orphanCtIds.length) jobs.push(supa.from('contracts').delete().in('id', orphanCtIds));
+
+        // 진단팀 구성(ediag) 삭제도 Supabase에 명시적으로 반영 (팀 구성 삭제 시 다른 사용자 화면에 반영되도록)
+        var liveEdiagIds = new Set(State.ediag.map(function(d){return d.id;}));
+        var dbEdiagRes = await supa.from('ediag').select('id');
+        var orphanEdiagIds = (dbEdiagRes.data||[]).map(function(r){return r.id;}).filter(function(id){return !liveEdiagIds.has(id);});
+        if(orphanEdiagIds.length) jobs.push(supa.from('ediag').delete().in('id', orphanEdiagIds));
       }catch(e){ console.error('고아행 정리 오류:', e); }
     }
     if(!isFiltered){
@@ -3581,7 +3587,7 @@ const Ediag = {
     ]);
   },
 
-  delTeam(contractId){
+  async delTeam(contractId){
     const c = contractById(contractId);
     const d = ediagByContract(contractId);
     if(!d){ toast('삭제할 팀 구성이 없습니다'); return; }
@@ -3592,14 +3598,23 @@ ${teamInfo}
 
 팀 구성을 삭제할까요?
 (보고서 파일도 함께 삭제됩니다)`)) return;
+    const delId = d.id;
     State.ediag = State.ediag.filter(x=>x.contractId!==contractId);
-    State.saveAll();
+    toast('삭제 중...');
+    try{
+      // Supabase에서도 명시적으로 삭제 (다른 사용자 화면에 즉시 반영되도록)
+      await supa.from('ediag').delete().eq('id', delId);
+      await State.saveAll();
+      toast('✅ 팀 구성이 삭제됐습니다');
+    }catch(e){
+      toast('❌ 삭제 실패: '+e.message);
+      return;
+    }
     UI.closeModal();
     if(location.hash==='#ediagmail') Views.ediagmail();
     else _renderEdiag();
-    toast('팀 구성이 삭제됐습니다');
   },
-  saveTeam(contractId){
+  async saveTeam(contractId){
     const g = id=>document.getElementById(id);
     const leaderVal = g('ediag-leader')?.value||'';
     if(!leaderVal){ toast('팀장을 선택하세요'); return; }
@@ -3626,11 +3641,18 @@ ${teamInfo}
     const exist = State.ediag.findIndex(d=>d.contractId===contractId);
     if(exist>=0){ State.ediag[exist] = {...State.ediag[exist], ...data}; }  // files 보존
     else { data.id = DB.uid(); data.files = {}; State.ediag.push(data); }
-    State.saveAll(); UI.closeModal();
+    toast('저장 중...');
+    try{
+      await State.saveAll();
+      toast(`✅ 팀 구성 저장 완료 · 팀장 ${lName} + 팀원 ${members.length}명`);
+    }catch(e){
+      toast('❌ 저장 실패: '+e.message);
+      return;
+    }
+    UI.closeModal();
     // 현재 화면에 맞게 리렌더
     if(location.hash==='#ediagmail') Views.ediagmail();
     else _renderEdiag();
-    toast(`팀 구성 저장 완료 · 팀장 ${lName} + 팀원 ${members.length}명`);
   }
 };
 </script>
@@ -4020,7 +4042,7 @@ window.EdiagMail = {
   },
 
 
-  saveSchedule(contractId){
+  async saveSchedule(contractId){
     const c  = contractById(contractId);
     const me = State.ediag.find(e=>e.contractId===contractId);
     if(!me){ toast('팀 구성이 필요합니다'); return; }
@@ -4099,10 +4121,16 @@ window.EdiagMail = {
     me.endDate   = e1;
     me.memo      = memo;
     me.memberSchedules = newMs;
-    State.saveAll();
+    toast('저장 중...');
+    try{
+      await State.saveAll();
+      toast('✅ [' + (c?c.no:'') + '] 진단일정이 저장되었습니다');
+    }catch(e){
+      toast('❌ 저장 실패: '+e.message);
+      return;
+    }
     UI.closeModal();
     Views.ediagmail();
-    toast('[' + (c?c.no:'') + '] 진단일정이 저장되었습니다');
   },
 
   /* 메일 발송 (mailto) */
