@@ -2397,18 +2397,21 @@ const SupaAuth = {
     _supaUser=user;
     const {data:prof}=await supa.from('staff_profiles').select('*').eq('email',user.email).maybeSingle();
     _supaProfile=prof||{name:user.email,role:'관리자'};
-    SupaAuth.applyMenus();SupaAuth.renderUser();
+    SupaAuth.renderUser();
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app-screen').style.display='flex';
-    await supaLoadAll();startRealtime();route();
+    await supaLoadAll();
+    SupaAuth.applyMenus(); // State.auth.roles 로드 완료 후 메뉴 재적용
+    startRealtime();route();
   },
   async onLoginWithProfile(localUser){
     _supaUser={id:localUser.userId,email:localUser.email||''};
     _supaProfile={name:localUser.name,role:localUser.role};
-    SupaAuth.applyMenus();SupaAuth.renderUser();
+    SupaAuth.renderUser();
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app-screen').style.display='flex';
     await supaLoadAll();
+    SupaAuth.applyMenus(); // State.auth.roles 로드 완료 후 메뉴 재적용 (정확한 권한 매트릭스 기준)
     startRealtime();
     route();
   },
