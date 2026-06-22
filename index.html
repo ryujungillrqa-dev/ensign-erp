@@ -909,7 +909,8 @@ function _ctRows(){
 }
 function _renderContracts(){
   const list = _ctRows();
-  const sumTotal = list.reduce((s,c)=>s+(Number(c.supply)||0)+(Number(c.vat)||0),0);
+  const sumSupply = list.reduce((s,c)=>s+(Number(c.supply)||0),0); // 공급가액(부가세 별도) 합계
+  const sumTotal  = list.reduce((s,c)=>s+(Number(c.supply)||0)+(Number(c.vat)||0),0); // 부가세 포함 합계
   const rows = list.map(c=>{
     const total = (Number(c.supply)||0)+(Number(c.vat)||0);
     const invs = contractInvoices(c.id).filter(v=>v.issueDate);
@@ -935,11 +936,21 @@ function _renderContracts(){
   const tb = document.getElementById('ct-tbody');
   const sm = document.getElementById('ct-summary');
   if(tb) tb.innerHTML = rows;
-  if(sm) sm.textContent = `표시 ${list.length}건 · 합계 ${fmt.money(sumTotal)}원`;
+  if(sm) sm.innerHTML = `검색결과 <b>${list.length}</b>건`;
+  // 상단 KPI 카드 (대상년도 필터 등에 따라 동적 갱신)
+  const kpiBox = document.getElementById('ct-kpis');
+  if(kpiBox){
+    const yLabel = ctFilter.year ? ctFilter.year+'년 ' : '전체 ';
+    kpiBox.innerHTML = `
+      <div class="kpi a"><div class="lb">${yLabel}계약건수</div><div class="vl">${list.length}<small> 건</small></div></div>
+      <div class="kpi b"><div class="lb">${yLabel}계약금액(부가세포함)</div><div class="vl">${fmt.money(sumTotal)}<small> 원</small></div></div>
+      <div class="kpi e"><div class="lb">${yLabel}계약금액(부가세별도)</div><div class="vl">${fmt.money(sumSupply)}<small> 원</small></div></div>`;
+  }
 }
 Views.contracts = function(){
   const years = [...new Set(State.contracts.map(c=>c.year))].sort().reverse();
   document.getElementById('content').innerHTML = `
+    <div class="kpis" id="ct-kpis" style="grid-template-columns:repeat(3,minmax(160px,1fr))"></div>
     <div class="toolbar sticky-toolbar">
       <input type="search" id="ct-search" placeholder="계약번호·계약명·업체명 검색" value="${esc(ctFilter.q)}" oninput="searchInput(event,'ct')" style="width:240px">
       <select onchange="ctFilter.year=this.value;_renderContracts()">
@@ -951,7 +962,7 @@ Views.contracts = function(){
         ${Object.keys(TYPE_CODES).map(k=>`<option value="${k}" ${ctFilter.type===k?'selected':''}>${TYPE_CODES[k]}</option>`).join('')}
       </select>
       <span class="sp"></span>
-      <span id="ct-summary" style="font-size:12.5px;color:var(--ink2)"></span>
+      <span id="ct-summary" style="font-size:12.5px;color:var(--ink2);white-space:nowrap"></span>
       <button class="btn" onclick="Contracts.template()">업로드 양식</button>
       <label class="btn">엑셀 일괄등록<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="Contracts.importXlsx(this)"></label>
       <button class="btn" onclick="Contracts.exportXlsx()">엑셀 내보내기</button>
@@ -1245,16 +1256,20 @@ function _invHtml(){
     }
     return true;
   }).sort((a,b)=>(b.no||'').localeCompare(a.no||''));
-  let html='', grandIssued=0, grandUnpaid=0;
+  let html='', grandIssued=0, grandUnpaid=0, grandIssuedSupply=0, grandUnpaidSupply=0, grandCnt=0;
   cts.forEach(c=>{
     const invs = INV_KINDS.map(k=>contractInvoices(c.id).find(v=>v.kind===k)).filter(Boolean);
     if(invFilter.onlyUnpaid && !invs.some(v=>v.issueDate && !v.paid)) return;
     const ctotal=(Number(c.supply)||0)+(Number(c.vat)||0);
     // 총 발행금액 합계: '세금계산서 발행일' 기준 연도로 집계 (연도 미선택 시 전체발행분 = 발행일이 있는 모든 건)
     const issuedInvs = invs.filter(v=>v.issueDate && (!invFilter.year || v.issueDate.slice(0,4)===invFilter.year));
-    const issuedSum = issuedInvs.reduce((s,v)=>s+invoiceTotal(v),0);
-    const paidSum   = issuedInvs.filter(v=>v.paid).reduce((s,v)=>s+invoiceTotal(v),0);
+    const issuedSum = issuedInvs.reduce((s,v)=>s+invoiceTotal(v),0); // 부가세포함
+    const issuedSumSupply = issuedInvs.reduce((s,v)=>s+(Number(v.supply)||0),0); // 부가세별도
+    const paidSum   = issuedInvs.filter(v=>v.paid).reduce((s,v)=>s+invoiceTotal(v),0); // 부가세포함
+    const paidSumSupply = issuedInvs.filter(v=>v.paid).reduce((s,v)=>s+(Number(v.supply)||0),0); // 부가세별도
     grandIssued+=issuedSum; grandUnpaid+=issuedSum-paidSum;
+    grandIssuedSupply+=issuedSumSupply; grandUnpaidSupply+=issuedSumSupply-paidSumSupply;
+    grandCnt+=issuedInvs.length;
     const bodyRows=invs.map(v=>{
         const tot = invoiceTotal(v);
         return `<tr>
@@ -1287,21 +1302,31 @@ function _invHtml(){
         ${bodyRows}
       </table>`;
   });
-  return { html: html||`<div class="card"><div class="empty"><b>표시할 계약이 없습니다</b>계약관리에서 계약 등록 시 체크한 결제방식 행이 자동 생성됩니다</div></div>`, grandIssued, grandUnpaid };
+  return { html: html||`<div class="card"><div class="empty"><b>표시할 계약이 없습니다</b>계약관리에서 계약 등록 시 체크한 결제방식 행이 자동 생성됩니다</div></div>`, grandIssued, grandUnpaid, grandIssuedSupply, grandUnpaidSupply, grandCnt };
 }
 
 
 function _renderInvoices(){
-  const {html, grandIssued, grandUnpaid} = _invHtml();
+  const {html, grandIssued, grandUnpaid, grandIssuedSupply, grandUnpaidSupply, grandCnt} = _invHtml();
   const wrap = document.getElementById('inv-list');
   const sm   = document.getElementById('inv-summary');
   if(wrap) wrap.innerHTML = html;
-  const yearLabel = invFilter.year ? invFilter.year+'년 발행분 ' : '';
-  if(sm)   sm.innerHTML   = `${yearLabel}총발행 <b>${fmt.num(grandIssued)}</b>원 · 총미수 <b style="color:var(--red)">${fmt.num(grandUnpaid)}</b>원`;
+  if(sm)   sm.innerHTML   = `검색결과 <b>${grandCnt}</b>건`;
+  // 상단 KPI 카드 (발행년도 필터 등에 따라 동적 갱신)
+  const kpiBox = document.getElementById('inv-kpis');
+  if(kpiBox){
+    const yLabel = invFilter.year ? invFilter.year+'년 ' : '전체 ';
+    kpiBox.innerHTML = `
+      <div class="kpi a"><div class="lb">${yLabel}발행건수</div><div class="vl">${grandCnt}<small> 건</small></div></div>
+      <div class="kpi b"><div class="lb">${yLabel}발행금액(부가세포함)</div><div class="vl">${fmt.money(grandIssued)}<small> 원</small></div></div>
+      <div class="kpi e"><div class="lb">${yLabel}발행금액(부가세별도)</div><div class="vl">${fmt.money(grandIssuedSupply)}<small> 원</small></div></div>
+      <div class="kpi c"><div class="lb">${yLabel}총미수금(부가세포함)</div><div class="vl" style="color:${grandUnpaid>0?'var(--red)':'inherit'}">${fmt.money(grandUnpaid)}<small> 원</small></div></div>
+      <div class="kpi a"><div class="lb">${yLabel}총미수금(부가세별도)</div><div class="vl" style="color:${grandUnpaidSupply>0?'var(--red)':'inherit'}">${fmt.money(grandUnpaidSupply)}<small> 원</small></div></div>`;
+  }
 }
 Views.invoices = function(){
-  const {html, grandIssued, grandUnpaid} = _invHtml();
   document.getElementById('content').innerHTML = `
+    <div class="kpis" id="inv-kpis" style="grid-template-columns:repeat(5,minmax(150px,1fr))"></div>
     <div class="toolbar sticky-toolbar">
       <input type="search" id="inv-search" placeholder="계약번호·계약명·업체명 검색" value="${esc(invFilter.q)}" oninput="searchInput(event,'inv')" style="width:200px">
       <select onchange="invFilter.ctYear=this.value;_renderInvoices()" title="계약 대상년도로 검색 (미발행 신규 계약 찾기용)">
@@ -1320,12 +1345,13 @@ Views.invoices = function(){
         <input type="checkbox" ${invFilter.onlyUnpaid?'checked':''} onchange="invFilter.onlyUnpaid=this.checked;_renderInvoices()"> 미수금만 보기
       </label>
       <span class="sp"></span>
-      <span id="inv-summary" style="font-size:12.5px;color:var(--ink2)">총발행 <b>${fmt.num(grandIssued)}</b>원 · 총미수 <b style="color:var(--red)">${fmt.num(grandUnpaid)}</b>원</span>
+      <span id="inv-summary" style="font-size:12.5px;color:var(--ink2);white-space:nowrap"></span>
       <button class="btn" onclick="Invoices.template()">업로드 양식</button>
       <label class="btn">엑셀 일괄등록<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="Invoices.importXlsx(this)"></label>
       <button class="btn" onclick="Invoices.exportXlsx()">엑셀 내보내기</button>
     </div>
-    <div id="inv-list">${html}</div>`;
+    <div id="inv-list"></div>`;
+  _renderInvoices();
 };
 
 const Invoices = {
