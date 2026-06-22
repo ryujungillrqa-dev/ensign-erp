@@ -435,12 +435,29 @@ function _copyEl(id){
 }
 function route(){
   const v = (location.hash.replace('#','') || 'contracts');
-  const view = Views[v] ? v : 'dash';
+  let view = Views[v] ? v : 'dash';
+  // 접근 권한 체크: 'none'이면 해당 화면 진입 차단 (메뉴 비표시 + URL 직접 접근도 방지)
+  if(typeof SupaAuth!=='undefined' && SupaAuth.getPermLevel){
+    let level = SupaAuth.getPermLevel(view);
+    if(level==='none'){
+      toast('접근 권한이 없습니다');
+      // 접근 가능한 첫 메뉴를 찾아 이동 (무한루프 방지: 변경이 있을 때만 hash 갱신)
+      const fallback = AUTH_MENUS.map(m=>m.key).find(k=>SupaAuth.getPermLevel(k)!=='none');
+      if(fallback && fallback!==view){
+        location.hash = '#'+fallback;
+        return; // hashchange가 route()를 다시 호출하므로 여기서 종료
+      }
+      // 접근 가능한 메뉴가 전혀 없으면 빈 안내만 표시하고 종료
+      document.getElementById('content').innerHTML = '<div class="card"><div class="empty"><b>접근 가능한 메뉴가 없습니다</b>관리자에게 문의해주세요</div></div>';
+      return;
+    }
+  }
   document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on', a.dataset.v===view));
   const meta = VIEW_META[view];
   document.getElementById('page-title').textContent = meta.title;
   document.getElementById('page-crumb').textContent = meta.crumb;
   Views[view]();
+  if(typeof SupaAuth!=='undefined' && SupaAuth.applyReadOnly) SupaAuth.applyReadOnly(view);
 }
 window.addEventListener('hashchange', route);
 
@@ -2418,6 +2435,52 @@ const SupaAuth = {
     document.querySelectorAll('#nav .grp').forEach(function(grp){
       if(grp.textContent.trim()==='CF') grp.style.display=showCF?'':'none';
     });
+  },
+  // 현재 로그인 사용자의 menuKey에 대한 권한 레벨 반환: 'rw' | 'r' | 'none'
+  getPermLevel(menuKey){
+    const role = _supaProfile?.role||'일반직원';
+    if(role==='관리자') return 'rw';
+    const perms = (State.auth.roles[role]||{}).perms || {};
+    if(Object.keys(perms).length>0) return perms[menuKey] || 'none';
+    // 매트릭스 미등록 역할: ROLE_MENUS 기본값 기준으로 해당 메뉴가 있으면 rw로 간주(하위호환)
+    const allowed = ROLE_MENUS[role]||ROLE_MENUS['일반직원'];
+    return allowed.includes(menuKey) ? 'rw' : 'none';
+  },
+  // 현재 화면(menuKey)이 읽기전용이면 등록/수정/삭제 버튼과 입력요소를 비활성화
+  applyReadOnly(menuKey){
+    const level = SupaAuth.getPermLevel(menuKey);
+    const isReadOnly = level === 'r';
+    if(!isReadOnly) return;
+    setTimeout(function(){
+      const content = document.getElementById('content');
+      if(!content) return;
+      // 쓰기 동작을 유발하는 버튼들을 비활성화 (수정/삭제/등록/저장/일괄등록/체크박스 등)
+      content.querySelectorAll('button, label.btn').forEach(function(btn){
+        const text = (btn.textContent||'').trim();
+        const isWriteAction = /등록|수정|삭제|저장|일괄|발행|입금|매칭|업로드|초기화|배정|역할|PIN/.test(text)
+          || (btn.getAttribute('onclick')||'').match(/\.(save|del|edit|create|update|remove|import|upload|reset)\(/i);
+        if(isWriteAction){
+          btn.disabled = true;
+          btn.style.opacity = '0.45';
+          btn.style.cursor = 'not-allowed';
+          btn.title = '읽기 전용 권한입니다';
+          btn.onclick = function(e){ e.preventDefault(); e.stopPropagation(); toast('읽기 전용 권한입니다'); return false; };
+        }
+      });
+      // 체크박스/입력값 변경도 막음 (단, 검색창은 예외)
+      content.querySelectorAll('input[type="checkbox"], input[type="file"]').forEach(function(el){
+        if(el.closest('.toolbar')) return; // 검색창/필터는 허용
+        el.disabled = true;
+      });
+      // 안내 배너 표시
+      if(!document.getElementById('readonly-banner')){
+        const banner = document.createElement('div');
+        banner.id = 'readonly-banner';
+        banner.style.cssText = 'background:#fff3e0;color:#e65100;padding:7px 14px;border-radius:7px;font-size:12.5px;margin-bottom:10px;font-weight:600';
+        banner.textContent = '🔒 읽기 전용 권한입니다. 등록/수정/삭제가 제한됩니다.';
+        content.insertBefore(banner, content.firstChild);
+      }
+    }, 50);
   },
   renderUser(){
     const el=document.getElementById('supa-user');if(!el)return;
