@@ -164,7 +164,7 @@ table.dz td.num-ro{padding:6px 9px;text-align:right;font-variant-numeric:tabular
     <div id="pin-error" style="display:none;background:#fde8e8;color:#c0392b;padding:8px 12px;border-radius:7px;font-size:12px;margin-bottom:12px;text-align:center"></div>
     <div style="display:flex;gap:12px;justify-content:center;margin-bottom:24px"><div id="pin-dots" style="display:flex;gap:12px"></div></div>
     <div id="login-keypad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px"></div>
-    <button onclick="PinAuth.switchUser()" style="width:100%;background:#f0f5f3;border:1px solid #d1dbd9;border-radius:8px;padding:8px;font-size:12px;color:#7d918c;cursor:pointer;margin-bottom:8px">다른 계정으로 로그인</button>
+    <button onclick="PinAuth.confirmSwitchUser()" style="width:100%;background:#f0f5f3;border:1px solid #d1dbd9;border-radius:8px;padding:8px;font-size:12px;color:#7d918c;cursor:pointer;margin-bottom:8px">다른 계정으로 로그인</button>
     <div style="text-align:right;margin-top:4px"><button onclick="PinAuth.showEmailLogin()" style="background:none;border:none;font-size:11px;color:#b0bbb8;cursor:pointer;text-decoration:underline">관리자 로그인</button></div>
   </div>
   <div id="email-login" style="display:none;background:#fff;border-radius:16px;padding:36px 40px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
@@ -2729,6 +2729,10 @@ const PinAuth={
     this._renderKeypad('login-keypad','login');
     this._dots('pin-dots',0);
     document.getElementById('pin-error').style.display='none';
+    // "다른 계정으로 로그인" 버튼을 원래 상태로 복원 (취소 상태에서 돌아온 경우 대비)
+    var self = this;
+    var btn = document.querySelector('#pin-login button[onclick*="confirmSwitchUser"], #pin-login button[onclick*="showPinLogin"]');
+    if(btn){ btn.textContent = '다른 계정으로 로그인'; btn.onclick = function(){ self.confirmSwitchUser(); }; }
   },
   showEmailLogin(){
     document.getElementById('pin-setup').style.display='none';
@@ -2764,6 +2768,10 @@ const PinAuth={
         this._confirmPin+=digit;this._dots('confirm-dots',this._confirmPin.length);
         if(this._confirmPin.length===6) setTimeout(function(){self._finishSetup();},200);
       }
+    } else if(mode==='switching'){
+      if(this._loginPin.length>=6)return;
+      this._loginPin+=digit;this._dots('pin-dots',this._loginPin.length);
+      if(this._loginPin.length===6) setTimeout(function(){self._verifySwitchPin();},200);
     } else {
       if(this._loginPin.length>=6)return;
       this._loginPin+=digit;this._dots('pin-dots',this._loginPin.length);
@@ -2855,6 +2863,54 @@ const PinAuth={
     ]);
   },
   cancelSetup(){this.showPinLogin();},
+
+  // "다른 계정으로 로그인" 클릭 시: 곧바로 초기화하지 않고, 먼저 현재 등록된 사용자의 PIN을 확인받음
+  confirmSwitchUser(){
+    var stored = JSON.parse(localStorage.getItem('ensign_local_user')||'null');
+    if(!stored){ this.switchUser(); return; } // 등록된 사용자가 없으면 바로 설정화면으로
+    this._loginPin = '';
+    document.getElementById('pin-greeting').textContent = stored.name + '님의 현재 PIN을 입력하세요';
+    document.getElementById('pin-error').style.display = 'none';
+    this._renderKeypad('login-keypad', 'switching');
+    this._dots('pin-dots', 0);
+    // "다른 계정으로 로그인" 버튼을 "취소"로 임시 변경
+    var self = this;
+    var btn = document.querySelector('#pin-login button[onclick*="confirmSwitchUser"]');
+    if(btn){ btn.textContent = '취소'; btn.onclick = function(){ self.showPinLogin(); }; }
+  },
+
+  // 본인 확인용 PIN 검증 (계정 전환 전 단계, 일반 로그인과 동일한 5회 잠금 정책 적용)
+  _verifySwitchPin(){
+    var errEl = document.getElementById('pin-error');
+    errEl.style.display = 'none';
+    var stored = JSON.parse(localStorage.getItem('ensign_local_user')||'null');
+    var failCount = parseInt(localStorage.getItem('ensign_pin_fail')||'0');
+    if(failCount>=5){
+      var lockTime = parseInt(localStorage.getItem('ensign_pin_lock')||'0');
+      if(Date.now()-lockTime < 5*60*1000){
+        var remain = Math.ceil((5*60*1000-(Date.now()-lockTime))/60000);
+        errEl.textContent = 'PIN 5회 오류. '+remain+'분 후 다시 시도하세요.';
+        errEl.style.display = 'block';
+        this._loginPin=''; this._dots('pin-dots',0);
+        return;
+      } else { localStorage.setItem('ensign_pin_fail','0'); }
+    }
+    var pinHash = this._hash(this._loginPin, stored?.userId||'');
+    if(stored && pinHash === stored.pinHash){
+      localStorage.setItem('ensign_pin_fail','0');
+      // 본인 확인 성공 → 비로소 계정 전환(초기화) 허용
+      this.switchUser();
+    } else {
+      var newFail = failCount+1;
+      localStorage.setItem('ensign_pin_fail', String(newFail));
+      if(newFail>=5) localStorage.setItem('ensign_pin_lock', String(Date.now()));
+      errEl.textContent = '현재 PIN이 올바르지 않습니다. ('+newFail+'/5회)';
+      errEl.style.display = 'block';
+      this._loginPin = '';
+      this._dots('pin-dots', 0);
+    }
+  },
+
   switchUser(){localStorage.removeItem('ensign_local_user');localStorage.setItem('ensign_pin_fail','0');this._localUser=null;this.showSetup();},
   _hash:function(pin,salt){var h=0;var s=pin+salt+'ensign2024';for(var i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h=h&h;}return Math.abs(h).toString(36)+s.length.toString(36);}
 };
