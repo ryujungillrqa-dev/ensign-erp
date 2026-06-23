@@ -188,6 +188,7 @@ table.dz td.num-ro{padding:6px 9px;text-align:right;font-variant-numeric:tabular
     <a href="#contracts" data-v="contracts"><span class="ic">📄</span>계약관리</a>
     <a href="#ediagmail" data-v="ediagmail"><span class="ic">📧</span>진단일정등록</a>
     <a href="#ediag" data-v="ediag"><span class="ic">⚡</span>에너지진단</a>
+    <a href="#equip" data-v="equip"><span class="ic">🔧</span>진단장비현황</a>
     <a href="#invoices" data-v="invoices"><span class="ic">🧾</span>세금계산서</a>
     <div class="grp">관리자</div>
     <a href="#dash" data-v="dash"><span class="ic">▦</span>대시보드</a>
@@ -233,12 +234,12 @@ const supa = window.supabase.createClient(SUPA_URL, SUPA_KEY);
 let _supaUser = null;
 let _supaProfile = null;
 const ROLE_MENUS = {
-  '관리자':    ['contracts','ediagmail','ediag','invoices','dash','hr','auth','bank','match','savings','settings'],
-  '부관리자':  ['contracts','ediagmail','ediag','invoices','dash','hr','auth','settings'],
-  '계약담당':  ['contracts','ediagmail','ediag','invoices','dash'],
-  '진단팀장':  ['contracts','ediagmail','ediag','invoices'],
+  '관리자':    ['contracts','ediagmail','ediag','equip','invoices','dash','hr','auth','bank','match','savings','settings'],
+  '부관리자':  ['contracts','ediagmail','ediag','equip','invoices','dash','hr','auth','settings'],
+  '계약담당':  ['contracts','ediagmail','ediag','equip','invoices','dash'],
+  '진단팀장':  ['contracts','ediagmail','ediag','equip','invoices'],
   '자금담당':  ['contracts','ediagmail','ediag','invoices','hr'],
-  '일반직원':  ['contracts','ediagmail','ediag','invoices'],
+  '일반직원':  ['contracts','ediagmail','ediag','equip','invoices'],
 };
 
 'use strict';
@@ -261,8 +262,9 @@ const State = {
   hr:        DB.read('hr', []),
   auth:      DB.read('auth', { roles:{}, users:{} }),
   ediag:     DB.read('ediag', []),   // [{id,contractId,leader,members,startDate,endDate,memo,files:{report:{name,size,data},review:{name,size,data}}}]       // {id, name, dept, position, rank, joinDate, status(재직/휴직/퇴직), birth, email, phone, memo}    // {id, name, bankName, monthly, start, maturity, payments:[{date,amount}], memo}
+  equip:     DB.read('equip', []),   // [{id, equipName, equipNo, sn, calibrationHistory, purchaseYear, failureHistory, memo}]
   settings:  DB.read('settings', { company:'㈜엔자인', ceo:'', bizNo:'' }),
-  saveAll(){ DB.write('contracts',this.contracts); DB.write('invoices',this.invoices); DB.write('bank',this.bank); DB.write('savings',this.savings); DB.write('settings',this.settings); DB.write('hr',this.hr); DB.write('auth',this.auth); DB.write('ediag',this.ediag); }
+  saveAll(){ DB.write('contracts',this.contracts); DB.write('invoices',this.invoices); DB.write('bank',this.bank); DB.write('savings',this.savings); DB.write('settings',this.settings); DB.write('hr',this.hr); DB.write('auth',this.auth); DB.write('ediag',this.ediag); DB.write('equip',this.equip); }
 };
 
 /* ===== 도메인 상수 ===== */
@@ -351,6 +353,7 @@ const VIEW_META = {
   settings:{title:'설정 / 백업', crumb:'회사정보 · 데이터 관리'},
   hr:{title:'인사관리', crumb:'임직원 정보 · 직급 · 재직현황'},
   auth:{title:'권한관리', crumb:'메뉴별 접근 권한 · 직급별 설정'},
+  equip:{title:'진단장비현황', crumb:'에너지진단 장비 · 검교정 · 고장이력 관리'},
   ediag:{title:'에너지진단', crumb:'에너지진단팀 계약 · 진단팀 구성 관리'},
   ediagmail:{title:'진단일정등록', crumb:'에너지진단 일정 등록 · 팀장 메일 발송'}
 };
@@ -2533,6 +2536,8 @@ const _conv={
   hrFrom:function(r){return{id:r.id,name:r.name,dept:r.dept,position:r.position,rank:r.rank,joinDate:r.join_date,status:r.status||'재직',birth:r.birth,email:r.email,phone:r.phone,memo:r.memo};},
   ediagTo:function(d){return{id:d.id,contract_id:d.contractId,leader:d.leader||null,members:d.members||[],start_date:d.startDate||null,end_date:d.endDate||null,memo:d.memo||null,member_schedules:d.memberSchedules||{},files:d.files||{}};},
   ediagFrom:function(r){return{id:r.id,contractId:r.contract_id,leader:r.leader,members:r.members||[],startDate:r.start_date,endDate:r.end_date,memo:r.memo,memberSchedules:r.member_schedules||{},files:r.files||{}};},
+  equipTo:function(e){return{id:e.id,equip_name:e.equipName||'',equip_no:e.equipNo||'',sn:e.sn||'',calibration_history:e.calibrationHistory||'',purchase_year:e.purchaseYear||'',failure_history:e.failureHistory||'',memo:e.memo||''};},
+  equipFrom:function(r){return{id:r.id,equipName:r.equip_name,equipNo:r.equip_no,sn:r.sn,calibrationHistory:r.calibration_history,purchaseYear:r.purchase_year,failureHistory:r.failure_history,memo:r.memo};},
 };
 
 async function supaLoadAll(){
@@ -2545,6 +2550,7 @@ async function supaLoadAll(){
       supa.from('hr').select('*'),
       supa.from('ediag').select('*'),
       supa.from('auth_settings').select('*').eq('id',1).maybeSingle(),
+      supa.from('equip').select('*'),
     ]);
     State.contracts=(results[0].data||[]).map(_conv.ctFrom);
     State.invoices=(results[1].data||[]).map(_conv.invFrom);
@@ -2553,6 +2559,7 @@ async function supaLoadAll(){
     State.hr=(results[4].data||[]).map(_conv.hrFrom);
     State.ediag=(results[5].data||[]).map(_conv.ediagFrom);
     State.auth=results[6].data?{roles:results[6].data.roles||{},users:results[6].data.users||{}}:{roles:{},users:{}};
+    State.equip=(results[7].data||[]).map(_conv.equipFrom);
     // 팀 기반 필터링 적용
     applyTeamFilter();
   }catch(e){console.error('로드 오류:',e);}
@@ -2608,6 +2615,7 @@ State.saveAll=async function(){
     if(State.contracts.length){ jobs.push(supa.from('contracts').upsert(State.contracts.map(_conv.ctTo))); labels.push('contracts'); }
     if(State.invoices.length){  jobs.push(supa.from('invoices').upsert(State.invoices.map(_conv.invTo)));  labels.push('invoices'); }
     if(State.ediag.length){     jobs.push(supa.from('ediag').upsert(State.ediag.map(_conv.ediagTo)));      labels.push('ediag'); }
+    if(State.equip.length){     jobs.push(supa.from('equip').upsert(State.equip.map(_conv.equipTo)));      labels.push('equip'); }
     // 메모리(State)에서 삭제된 행이 Supabase에 남아있지 않도록 명시적으로 제거
     // (팀 필터링 대상 사용자는 본인이 못 보는 데이터를 건드릴 수 없으므로 제외)
     if(!isFiltered){
@@ -2627,6 +2635,11 @@ State.saveAll=async function(){
         var dbEdiagRes = await supa.from('ediag').select('id');
         var orphanEdiagIds = (dbEdiagRes.data||[]).map(function(r){return r.id;}).filter(function(id){return !liveEdiagIds.has(id);});
         if(orphanEdiagIds.length) jobs.push(supa.from('ediag').delete().in('id', orphanEdiagIds));
+
+        var liveEquipIds = new Set(State.equip.map(function(e){return e.id;}));
+        var dbEquipRes = await supa.from('equip').select('id');
+        var orphanEquipIds = (dbEquipRes.data||[]).map(function(r){return r.id;}).filter(function(id){return !liveEquipIds.has(id);});
+        if(orphanEquipIds.length) jobs.push(supa.from('equip').delete().in('id', orphanEquipIds));
       }catch(e){ console.error('고아행 정리 오류:', e); }
     }
     if(!isFiltered){
@@ -3285,6 +3298,7 @@ const AUTH_MENUS = [
   { key:'contracts',  label:'계약관리' },
   { key:'ediagmail',  label:'진단일정등록' },
   { key:'ediag',      label:'에너지진단' },
+  { key:'equip',      label:'진단장비현황' },
   { key:'invoices',   label:'세금계산서' },
   { key:'bank',       label:'통장거래' },
   { key:'match',      label:'입금매칭' },
@@ -3295,11 +3309,11 @@ const AUTH_MENUS = [
   { key:'settings',   label:'설정/백업' },
 ];
 const AUTH_ROLES_DEFAULT = [
-  { name:'관리자',    perms:{ contracts:'rw', invoices:'rw', bank:'rw', match:'rw', savings:'rw', dash:'rw', hr:'rw', auth:'rw', settings:'rw' } },
-  { name:'계약담당',  perms:{ contracts:'rw', invoices:'rw', bank:'r',  match:'r',  savings:'none', dash:'r', hr:'none', auth:'none', settings:'none' } },
-  { name:'자금담당',  perms:{ contracts:'r',  invoices:'r',  bank:'rw', match:'rw', savings:'rw',  dash:'r', hr:'none', auth:'none', settings:'none' } },
-  { name:'일반직원',  perms:{ contracts:'r',  invoices:'r',  bank:'none',match:'none',savings:'none',dash:'r', hr:'none', auth:'none', settings:'none' } },
-  { name:'열람전용',  perms:{ contracts:'r',  invoices:'r',  bank:'none',match:'none',savings:'none',dash:'r', hr:'none', auth:'none', settings:'none' } },
+  { name:'관리자',    perms:{ contracts:'rw', invoices:'rw', bank:'rw', match:'rw', savings:'rw', dash:'rw', hr:'rw', auth:'rw', settings:'rw', equip:'rw' } },
+  { name:'계약담당',  perms:{ contracts:'rw', invoices:'rw', bank:'r',  match:'r',  savings:'none', dash:'r', hr:'none', auth:'none', settings:'none', equip:'r' } },
+  { name:'자금담당',  perms:{ contracts:'r',  invoices:'r',  bank:'rw', match:'rw', savings:'rw',  dash:'r', hr:'none', auth:'none', settings:'none', equip:'none' } },
+  { name:'일반직원',  perms:{ contracts:'r',  invoices:'r',  bank:'none',match:'none',savings:'none',dash:'r', hr:'none', auth:'none', settings:'none', equip:'r' } },
+  { name:'열람전용',  perms:{ contracts:'r',  invoices:'r',  bank:'none',match:'none',savings:'none',dash:'r', hr:'none', auth:'none', settings:'none', equip:'r' } },
 ];
 
 function authInit(){
@@ -4469,6 +4483,158 @@ window.EdiagMail = {
   }catch(e){}
   setInterval(function(){ Updater.checkAutoReload(); }, 5*60*1000);
 })();
+</script>
+</body>
+<script>
+/* =====================================================
+   진단장비현황 (equip)
+   State.equip = [{id, equipName, equipNo, sn, calibrationHistory, purchaseYear, failureHistory, memo}]
+===================================================== */
+let equipFilter = { q:'' };
+
+Views.equip = function(){
+  document.getElementById('content').innerHTML = `
+    <div class="toolbar sticky-toolbar">
+      <input type="search" id="equip-search" placeholder="장비명·장비번호·SN 검색"
+        value="${esc(equipFilter.q)}" oninput="equipSearchInput(event)" style="width:240px">
+      <span class="sp"></span>
+      <span id="equip-summary" style="font-size:12.5px;color:var(--ink2)"></span>
+      <button class="btn pri" onclick="Equip.edit()">+ 장비 등록</button>
+    </div>
+    <div id="equip-list" style="margin-top:4px"></div>`;
+  _renderEquip();
+};
+
+/* 한글 IME 대응 검색 */
+const _equipIme = { composing:false };
+document.addEventListener('compositionstart', e=>{ if(e.target.id==='equip-search') _equipIme.composing=true; });
+document.addEventListener('compositionend',   e=>{ if(e.target.id==='equip-search'){ _equipIme.composing=false; equipFilter.q=e.target.value; _renderEquip(); }});
+function equipSearchInput(e){ if(_equipIme.composing) return; equipFilter.q=e.target.value; _renderEquip(); }
+
+function _equipRows(){
+  return (State.equip||[]).filter(eq=>{
+    if(!equipFilter.q) return true;
+    const q = equipFilter.q.toLowerCase();
+    return ((eq.equipName||'')+(eq.equipNo||'')+(eq.sn||'')).toLowerCase().includes(q);
+  }).sort((a,b)=>(a.equipName||'').localeCompare(b.equipName||''));
+}
+
+function _renderEquip(){
+  const list = _equipRows();
+  const sm = document.getElementById('equip-summary');
+  if(sm) sm.textContent = `장비 ${list.length}건`;
+
+  if(!list.length){
+    document.getElementById('equip-list').innerHTML =
+      `<div class="card"><div class="empty"><b>등록된 장비가 없습니다</b>우측 상단 [장비 등록] 버튼으로 시작하세요</div></div>`;
+    return;
+  }
+
+  const rows = list.map(eq=>`
+    <tr>
+      <td><b>${esc(eq.equipName||'')}</b></td>
+      <td>${esc(eq.equipNo||'-')}</td>
+      <td>${esc(eq.sn||'-')}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(eq.calibrationHistory||'')}">${esc(eq.calibrationHistory||'-')}</td>
+      <td class="ctr">${esc(eq.purchaseYear||'-')}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(eq.failureHistory||'')}">${esc(eq.failureHistory||'-')}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(eq.memo||'')}">${esc(eq.memo||'-')}</td>
+      <td class="ctr">
+        <button class="btn sm" onclick="Equip.edit('${eq.id}')">수정</button>
+        <button class="btn sm dgr" onclick="Equip.del('${eq.id}')">삭제</button>
+      </td>
+    </tr>`).join('');
+
+  document.getElementById('equip-list').innerHTML = `
+    <div class="card" style="margin:0"><div class="bd np tbl-wrap">
+      <table class="grid">
+        <thead><tr>
+          <th>장비명</th><th style="width:120px">장비번호</th><th style="width:140px">SN</th>
+          <th style="width:180px">검교정이력</th><th class="ctr" style="width:90px">구입년도</th>
+          <th style="width:180px">고장이력</th><th style="width:160px">비고</th>
+          <th class="ctr" style="width:100px">관리</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div></div>`;
+}
+
+const Equip = {
+  edit(id){
+    const eq = id ? (State.equip||[]).find(e=>e.id===id) : null;
+    const body = `
+      <div class="frm">
+        <div class="fld"><label>장비명 <span style="color:var(--red)">*</span></label>
+          <input id="eq-name" value="${esc(eq?eq.equipName||'':'')}" placeholder="예: 열화상카메라"></div>
+        <div class="fld"><label>장비번호</label>
+          <input id="eq-no" value="${esc(eq?eq.equipNo||'':'')}" placeholder="예: EQ-001"></div>
+        <div class="fld"><label>SN (시리얼번호)</label>
+          <input id="eq-sn" value="${esc(eq?eq.sn||'':'')}"></div>
+        <div class="fld"><label>구입년도</label>
+          <input id="eq-year" value="${esc(eq?eq.purchaseYear||'':'')}" placeholder="예: 2023"></div>
+        <div class="fld w2"><label>검교정이력</label>
+          <textarea id="eq-cal" rows="2" style="width:100%;resize:vertical" placeholder="예: 2024-03-15 검교정 완료 (○○계측)">${esc(eq?eq.calibrationHistory||'':'')}</textarea></div>
+        <div class="fld w2"><label>고장이력</label>
+          <textarea id="eq-fail" rows="2" style="width:100%;resize:vertical" placeholder="예: 2023-11 배터리 불량 수리">${esc(eq?eq.failureHistory||'':'')}</textarea></div>
+        <div class="fld w2"><label>비고</label>
+          <input id="eq-memo" value="${esc(eq?eq.memo||'':'')}"></div>
+      </div>`;
+    UI.openModal(eq ? '장비 수정 — '+eq.equipName : '장비 등록', body, [
+      {label:'취소', onClick:UI.closeModal},
+      {label:'저장', cls:'pri', onClick:()=>Equip.save(id)}
+    ]);
+  },
+
+  async save(id){
+    const g = i=>document.getElementById(i);
+    const equipName = g('eq-name').value.trim();
+    if(!equipName){ toast('장비명을 입력하세요'); return; }
+    const data = {
+      equipName,
+      equipNo: g('eq-no').value.trim(),
+      sn: g('eq-sn').value.trim(),
+      purchaseYear: g('eq-year').value.trim(),
+      calibrationHistory: g('eq-cal').value.trim(),
+      failureHistory: g('eq-fail').value.trim(),
+      memo: g('eq-memo').value.trim()
+    };
+    if(!State.equip) State.equip = [];
+    if(id){
+      const idx = State.equip.findIndex(e=>e.id===id);
+      if(idx>=0) State.equip[idx] = {...State.equip[idx], ...data};
+    } else {
+      data.id = DB.uid();
+      State.equip.push(data);
+    }
+    toast('저장 중...');
+    try{
+      await State.saveAll();
+      toast('✅ 장비 정보가 저장되었습니다');
+    }catch(e){
+      toast('❌ 저장 실패: '+e.message);
+      return;
+    }
+    UI.closeModal();
+    _renderEquip();
+  },
+
+  async del(id){
+    const eq = (State.equip||[]).find(e=>e.id===id);
+    if(!eq) return;
+    if(!confirm(`[${eq.equipName}] 장비 정보를 삭제할까요?`)) return;
+    State.equip = State.equip.filter(e=>e.id!==id);
+    toast('삭제 중...');
+    try{
+      await supa.from('equip').delete().eq('id', id);
+      await State.saveAll();
+      toast('✅ 삭제되었습니다');
+    }catch(e){
+      toast('❌ 삭제 실패: '+e.message);
+      return;
+    }
+    _renderEquip();
+  }
+};
 </script>
 </body>
 </html>
