@@ -1032,6 +1032,15 @@ const Contracts = {
           </div>
           <span class="hint">예: 일시불 계약은 [전체발행]만, 분할 계약은 [선급금]+[잔금] 등으로 선택</span>
         </div>
+        <div class="fld w2" style="border-top:1px dashed var(--line2);padding-top:10px;margin-top:4px">
+          <label style="font-size:12.5px;color:var(--ink2);font-weight:700">진단대상업체 담당자정보 <span style="font-size:11px;color:var(--ink3);font-weight:400">(업무화면 비표시, 진단일정 엑셀에만 출력)</span></label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
+            <input id="f-site-contact-name" placeholder="성명" value="${esc(c?c.siteContactName||'':'')}">
+            <input id="f-site-contact-phone" placeholder="연락처" value="${esc(c?c.siteContactPhone||'':'')}">
+            <input id="f-site-contact-email" placeholder="이메일" value="${esc(c?c.siteContactEmail||'':'')}">
+            <input id="f-site-address" placeholder="사업장주소" value="${esc(c?c.siteAddress||'':'')}">
+          </div>
+        </div>
         <div class="fld w2"><label>비고</label><input id="f-memo" value="${esc(c?c.memo||'':'')}"></div>
       </div>`;
     UI.openModal(c ? '계약 수정 — '+c.no : '계약 등록', body, [
@@ -1082,6 +1091,10 @@ const Contracts = {
       toe: typeCode==='04' ? Number(g('f-toe').value)||0 : 0,
       grade: typeCode==='04' ? toeGrade(g('f-toe').value) : '',
       payKinds,
+      siteContactName:  g('f-site-contact-name')?.value.trim()  || '',
+      siteContactPhone: g('f-site-contact-phone')?.value.trim() || '',
+      siteContactEmail: g('f-site-contact-email')?.value.trim() || '',
+      siteAddress:      g('f-site-address')?.value.trim()       || '',
       memo: g('f-memo').value.trim()
     };
     if(id){
@@ -4470,6 +4483,10 @@ window.EdiagMail = {
         '직급':     leaderHr ? (leaderHr.rank||'') : '',
         '핸드폰':   leaderHr ? (leaderHr.phone||'') : '',
         '이메일':   leaderHr ? (leaderHr.email||'') : '',
+        '진단대상_담당자성명': c.siteContactName||'',
+        '진단대상_담당자연락처': c.siteContactPhone||'',
+        '진단대상_담당자이메일': c.siteContactEmail||'',
+        '진단대상_사업장주소': c.siteAddress||'',
         '현장진단일정(일수)': leaderMs.siteDates&&leaderMs.siteDates.length ? (fmtDates(leaderMs.siteDates) + ' (' + leaderMs.siteDates.length + '일)') : '',
         '보고서작성일정(일수)': leaderMs.reportDates&&leaderMs.reportDates.length ? (fmtDates(leaderMs.reportDates) + ' (' + leaderMs.reportDates.length + '일)') : '',
         '비고':     d.memo||''
@@ -4490,6 +4507,10 @@ window.EdiagMail = {
           '직급':     mHr ? (mHr.rank||'') : '',
           '핸드폰':   mHr ? (mHr.phone||'') : '',
           '이메일':   mHr ? (mHr.email||'') : '',
+          '진단대상_담당자성명': c.siteContactName||'',
+          '진단대상_담당자연락처': c.siteContactPhone||'',
+          '진단대상_담당자이메일': c.siteContactEmail||'',
+          '진단대상_사업장주소': c.siteAddress||'',
           '현장진단일정(일수)': mMs.siteDates&&mMs.siteDates.length ? (fmtDates(mMs.siteDates) + ' (' + mMs.siteDates.length + '일)') : '',
           '보고서작성일정(일수)': mMs.reportDates&&mMs.reportDates.length ? (fmtDates(mMs.reportDates) + ' (' + mMs.reportDates.length + '일)') : '',
           '비고':     d.memo||''
@@ -4504,6 +4525,7 @@ window.EdiagMail = {
     ws['!cols'] = [
       {wch:14},{wch:20},{wch:20},{wch:6},{wch:14},
       {wch:6},{wch:10},{wch:8},{wch:14},{wch:24},
+      {wch:10},{wch:14},{wch:22},{wch:30},
       {wch:40},{wch:40},{wch:20}
     ];
     var wb = XLSX.utils.book_new();
