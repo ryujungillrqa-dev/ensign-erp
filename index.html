@@ -2536,8 +2536,8 @@ const _conv={
   hrFrom:function(r){return{id:r.id,name:r.name,dept:r.dept,position:r.position,rank:r.rank,joinDate:r.join_date,status:r.status||'재직',birth:r.birth,email:r.email,phone:r.phone,memo:r.memo};},
   ediagTo:function(d){return{id:d.id,contract_id:d.contractId,leader:d.leader||null,members:d.members||[],start_date:d.startDate||null,end_date:d.endDate||null,memo:d.memo||null,member_schedules:d.memberSchedules||{},files:d.files||{}};},
   ediagFrom:function(r){return{id:r.id,contractId:r.contract_id,leader:r.leader,members:r.members||[],startDate:r.start_date,endDate:r.end_date,memo:r.memo,memberSchedules:r.member_schedules||{},files:r.files||{}};},
-  equipTo:function(e){return{id:e.id,equip_name:e.equipName||'',equip_no:e.equipNo||'',sn:e.sn||'',calibration_history:e.calibrationHistory||'',purchase_year:e.purchaseYear||'',failure_history:e.failureHistory||'',memo:e.memo||''};},
-  equipFrom:function(r){return{id:r.id,equipName:r.equip_name,equipNo:r.equip_no,sn:r.sn,calibrationHistory:r.calibration_history,purchaseYear:r.purchase_year,failureHistory:r.failure_history,memo:r.memo};},
+  equipTo:function(e){return{id:e.id,equip_name:e.equipName||'',equip_no:e.equipNo||'',sn:e.sn||'',calibration_history:e.calibrationHistory||'',purchase_year:e.purchaseYear||'',failure_history:e.failureHistory||'',memo:e.memo||'',holder_name:e.holderName||'',holder_since:e.holderSince||'',handover_history:e.handoverHistory||[]};},
+  equipFrom:function(r){return{id:r.id,equipName:r.equip_name,equipNo:r.equip_no,sn:r.sn,calibrationHistory:r.calibration_history,purchaseYear:r.purchase_year,failureHistory:r.failure_history,memo:r.memo,holderName:r.holder_name||'',holderSince:r.holder_since||'',handoverHistory:r.handover_history||[]};},
 };
 
 async function supaLoadAll(){
@@ -4492,20 +4492,18 @@ window.EdiagMail = {
 ===================================================== */
 let equipFilter = { q:'' };
 
+let equipTab = 'list'; // 'list'=장비목록, 'byPerson'=개인별 보유현황
 Views.equip = function(){
   document.getElementById('content').innerHTML = `
     <div class="toolbar sticky-toolbar">
-      <input type="search" id="equip-search" placeholder="장비명·장비번호·SN 검색"
-        value="${esc(equipFilter.q)}" oninput="equipSearchInput(event)" style="width:240px">
+      <button class="btn ${equipTab==='list'?'pri':''}" onclick="equipTab='list';Views.equip()">📋 장비목록</button>
+      <button class="btn ${equipTab==='byPerson'?'pri':''}" onclick="equipTab='byPerson';Views.equip()">👤 개인별 보유현황</button>
       <span class="sp"></span>
-      <span id="equip-summary" style="font-size:12.5px;color:var(--ink2)"></span>
-      <button class="btn" onclick="Equip.template()">업로드 양식</button>
-      <label class="btn">엑셀 일괄등록<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="Equip.importXlsx(this)"></label>
-      <button class="btn" onclick="Equip.exportXlsx()">엑셀 내보내기</button>
-      <button class="btn pri" onclick="Equip.edit()">+ 장비 등록</button>
+      <div id="equip-toolbar-extra" style="display:flex;gap:8px;align-items:center"></div>
     </div>
     <div id="equip-list" style="margin-top:4px"></div>`;
-  _renderEquip();
+  if(equipTab==='list') _renderEquip();
+  else _renderEquipByPerson();
 };
 
 /* 한글 IME 대응 검색 */
@@ -4523,6 +4521,17 @@ function _equipRows(){
 }
 
 function _renderEquip(){
+  const extra = document.getElementById('equip-toolbar-extra');
+  if(extra){
+    extra.innerHTML = `
+      <input type="search" id="equip-search" placeholder="장비명·장비번호·SN 검색"
+        value="${esc(equipFilter.q)}" oninput="equipSearchInput(event)" style="width:240px">
+      <span id="equip-summary" style="font-size:12.5px;color:var(--ink2)"></span>
+      <button class="btn" onclick="Equip.template()">업로드 양식</button>
+      <label class="btn">엑셀 일괄등록<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="Equip.importXlsx(this)"></label>
+      <button class="btn" onclick="Equip.exportXlsx()">엑셀 내보내기</button>
+      <button class="btn pri" onclick="Equip.edit()">+ 장비 등록</button>`;
+  }
   const list = _equipRows();
   const sm = document.getElementById('equip-summary');
   if(sm) sm.textContent = `장비 ${list.length}건`;
@@ -4533,33 +4542,82 @@ function _renderEquip(){
     return;
   }
 
-  const rows = list.map(eq=>`
-    <tr>
+  const rows = list.map(eq=>{
+    const holderTag = eq.holderName
+      ? `<span class="tag t2">👤 ${esc(eq.holderName)}</span>`
+      : `<span style="color:var(--ink3);font-size:12px">미배정(보관중)</span>`;
+    const histCount = (eq.handoverHistory||[]).length;
+    return `<tr>
       <td><b>${esc(eq.equipName||'')}</b></td>
       <td>${esc(eq.equipNo||'-')}</td>
       <td>${esc(eq.sn||'-')}</td>
-      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(eq.calibrationHistory||'')}">${esc(eq.calibrationHistory||'-')}</td>
+      <td>${holderTag}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(eq.calibrationHistory||'')}">${esc(eq.calibrationHistory||'-')}</td>
       <td class="ctr">${esc(eq.purchaseYear||'-')}</td>
-      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(eq.failureHistory||'')}">${esc(eq.failureHistory||'-')}</td>
-      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(eq.memo||'')}">${esc(eq.memo||'-')}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(eq.failureHistory||'')}">${esc(eq.failureHistory||'-')}</td>
       <td class="ctr">
+        <button class="btn sm" style="background:#fff3e0;border-color:#ffcc80;color:#e65100" onclick="Equip.handover('${eq.id}')">🔄 인수인계</button>
+        <button class="btn sm" onclick="Equip.history('${eq.id}')">이력${histCount?'('+histCount+')':''}</button>
         <button class="btn sm" onclick="Equip.edit('${eq.id}')">수정</button>
         <button class="btn sm dgr" onclick="Equip.del('${eq.id}')">삭제</button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   document.getElementById('equip-list').innerHTML = `
     <div class="card" style="margin:0"><div class="bd np tbl-wrap">
       <table class="grid">
         <thead><tr>
-          <th>장비명</th><th style="width:120px">장비번호</th><th style="width:140px">SN</th>
-          <th style="width:180px">검교정이력</th><th class="ctr" style="width:90px">구입년도</th>
-          <th style="width:180px">고장이력</th><th style="width:160px">비고</th>
-          <th class="ctr" style="width:100px">관리</th>
+          <th>장비명</th><th style="width:110px">장비번호</th><th style="width:130px">SN</th>
+          <th style="width:120px">현재 보유자</th>
+          <th style="width:150px">검교정이력</th><th class="ctr" style="width:80px">구입년도</th>
+          <th style="width:150px">고장이력</th>
+          <th class="ctr" style="width:230px">관리</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div></div>`;
+}
+
+/* 개인별 보유현황: 직원별로 현재 들고 있는 장비 목록 */
+function _renderEquipByPerson(){
+  const extra = document.getElementById('equip-toolbar-extra');
+  if(extra) extra.innerHTML = `<span style="font-size:12.5px;color:var(--ink2)">직원별로 현재 보유 중인 장비를 모아서 보여줍니다</span>`;
+
+  const list = State.equip||[];
+  const byPerson = {};
+  list.forEach(eq=>{
+    if(!eq.holderName) return;
+    if(!byPerson[eq.holderName]) byPerson[eq.holderName] = [];
+    byPerson[eq.holderName].push(eq);
+  });
+  const names = Object.keys(byPerson).sort();
+
+  if(!names.length){
+    document.getElementById('equip-list').innerHTML =
+      `<div class="card"><div class="empty"><b>현재 보유자가 배정된 장비가 없습니다</b>장비목록에서 [인수인계] 버튼으로 보유자를 지정하세요</div></div>`;
+    return;
+  }
+
+  const cards = names.map(name=>{
+    const items = byPerson[name].map(eq=>`
+      <tr>
+        <td><b>${esc(eq.equipName||'')}</b></td>
+        <td>${esc(eq.equipNo||'-')}</td>
+        <td>${esc(eq.sn||'-')}</td>
+        <td style="font-size:12px;color:var(--ink3)">${esc(eq.holderSince||'-')} 인수</td>
+        <td class="ctr"><button class="btn sm" style="background:#fff3e0;border-color:#ffcc80;color:#e65100" onclick="Equip.handover('${eq.id}')">🔄 인수인계</button></td>
+      </tr>`).join('');
+    return `<div class="card">
+      <div class="hd"><h2>👤 ${esc(name)} <span style="font-size:12px;color:var(--ink3);font-weight:500">보유 장비 ${byPerson[name].length}건</span></h2></div>
+      <div class="bd np"><table class="grid">
+        <thead><tr><th>장비명</th><th style="width:110px">장비번호</th><th style="width:130px">SN</th><th style="width:120px">인수일</th><th class="ctr" style="width:120px">관리</th></tr></thead>
+        <tbody>${items}</tbody>
+      </table></div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('equip-list').innerHTML = cards;
 }
 
 const Equip = {
@@ -4635,7 +4693,96 @@ const Equip = {
       toast('❌ 삭제 실패: '+e.message);
       return;
     }
-    _renderEquip();
+    if(equipTab==='list') _renderEquip(); else _renderEquipByPerson();
+  },
+
+  /* 인수인계 모달: 현재 보유자 → 새 보유자에게 장비를 넘김 */
+  handover(id){
+    const eq = (State.equip||[]).find(e=>e.id===id);
+    if(!eq) return;
+    const staff = (State.hr||[]).filter(h=>h.status==='재직'||!h.status).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    const today = todayStr();
+    const body = `
+      <div style="padding:10px 14px;background:var(--brand-soft);border-radius:8px;font-size:13px;margin-bottom:14px">
+        <b>${esc(eq.equipName)}</b> ${eq.equipNo?'('+esc(eq.equipNo)+')':''}<br>
+        <span style="color:var(--ink2)">현재 보유자: ${eq.holderName?esc(eq.holderName):'미배정(보관중)'}</span>
+      </div>
+      <div class="frm">
+        <div class="fld"><label>인수자 (새 보유자) <span style="color:var(--red)">*</span></label>
+          <select id="ho-name">
+            <option value="">선택하세요</option>
+            <option value="__return__">↩ 반납 (미배정/보관중으로 변경)</option>
+            ${staff.map(h=>`<option value="${esc(h.name)}">${esc(h.name)} (${esc(h.dept||'')} ${esc(h.rank||'')})</option>`).join('')}
+          </select>
+        </div>
+        <div class="fld"><label>인수일자</label><input type="date" id="ho-date" value="${today}"></div>
+        <div class="fld w2"><label>비고</label><input id="ho-memo" placeholder="예: 정기 검교정 위탁 등"></div>
+      </div>`;
+    UI.openModal('인수인계 — '+esc(eq.equipName), body, [
+      {label:'취소', onClick:UI.closeModal},
+      {label:'인수인계 처리', cls:'pri', onClick:()=>Equip.doHandover(id)}
+    ]);
+  },
+
+  async doHandover(id){
+    const g = i=>document.getElementById(i);
+    const eq = (State.equip||[]).find(e=>e.id===id);
+    if(!eq) return;
+    const newHolderRaw = g('ho-name').value;
+    if(!newHolderRaw){ toast('인수자를 선택하세요'); return; }
+    const date = g('ho-date').value || todayStr();
+    const memo = g('ho-memo').value.trim();
+    const isReturn = newHolderRaw === '__return__';
+    const newHolder = isReturn ? '' : newHolderRaw;
+    const prevHolder = eq.holderName || '';
+
+    if(!eq.handoverHistory) eq.handoverHistory = [];
+    eq.handoverHistory.push({
+      id: DB.uid(),
+      fromName: prevHolder || '(미배정)',
+      toName: isReturn ? '(반납/보관중)' : newHolder,
+      date,
+      memo
+    });
+    eq.holderName = newHolder;
+    eq.holderSince = isReturn ? '' : date;
+
+    toast('처리 중...');
+    try{
+      await State.saveAll();
+      toast(isReturn ? '✅ 반납 처리되었습니다' : '✅ '+newHolder+'님에게 인수인계되었습니다');
+    }catch(e){
+      toast('❌ 처리 실패: '+e.message);
+      return;
+    }
+    UI.closeModal();
+    if(equipTab==='list') _renderEquip(); else _renderEquipByPerson();
+  },
+
+  /* 인수인계 이력 보기 */
+  history(id){
+    const eq = (State.equip||[]).find(e=>e.id===id);
+    if(!eq) return;
+    const hist = (eq.handoverHistory||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    const rows = hist.length
+      ? hist.map(h=>`
+        <tr>
+          <td style="font-size:12px">${esc(h.date||'-')}</td>
+          <td>${esc(h.fromName||'-')} → <b>${esc(h.toName||'-')}</b></td>
+          <td style="font-size:12px;color:var(--ink3)">${esc(h.memo||'')}</td>
+        </tr>`).join('')
+      : `<tr><td colspan="3"><div class="empty">인수인계 이력이 없습니다</div></td></tr>`;
+    const body = `
+      <div style="margin-bottom:10px;font-size:13px;color:var(--ink2)">
+        <b>${esc(eq.equipName)}</b> ${eq.equipNo?'('+esc(eq.equipNo)+')':''} · 현재 보유자: ${eq.holderName?esc(eq.holderName):'미배정(보관중)'}
+      </div>
+      <table class="grid" style="font-size:13px">
+        <thead><tr><th style="width:100px">일자</th><th>인계 내역</th><th>비고</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    UI.openModal('인수인계 이력 — '+esc(eq.equipName), body, [
+      {label:'닫기', cls:'pri', onClick:UI.closeModal}
+    ]);
   },
 
   /* 업로드 양식 다운로드 */
