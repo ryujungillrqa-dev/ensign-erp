@@ -2846,7 +2846,9 @@ const PinAuth={
       if(profRes.data&&profRes.data.length>0){
         stored.role=profRes.data[0].role||stored.role;
         var resetAt = profRes.data[0].pin_reset_at;
-        if(resetAt && stored.registeredAt && new Date(resetAt) > new Date(stored.registeredAt)){
+        // registeredAt이 없는 기존 등록자는 0(아주 오래 전)으로 간주해 비교 — pin_reset_at이 있으면 무조건 초기화 대상
+        var regAt = stored.registeredAt ? new Date(stored.registeredAt) : new Date(0);
+        if(resetAt && new Date(resetAt) > regAt){
           // 관리자가 PIN을 초기화함 → 이 기기의 등록 정보를 지우고 재등록 화면으로
           localStorage.removeItem('ensign_local_user');
           localStorage.removeItem('ensign_pin_session');
