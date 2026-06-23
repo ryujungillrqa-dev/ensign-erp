@@ -4188,7 +4188,7 @@ window.EdiagMail = {
       + '<div style="display:flex;align-items:center;gap:16px;padding:9px 12px;background:#f7f9f8;border-radius:8px;margin-bottom:10px;font-size:12.5px;font-weight:600">'
       + '<span style="display:flex;align-items:center;gap:5px;color:#d32f2f"><input type="checkbox" checked disabled style="width:12px;height:12px;accent-color:#d32f2f">📍 현장진단</span>'
       + '<span style="display:flex;align-items:center;gap:5px;color:#1565c0"><input type="checkbox" checked disabled style="width:12px;height:12px;accent-color:#1565c0">📝 보고서작성</span>'
-      + '<span style="color:var(--ink3);font-size:11.5px;font-weight:400">— 현장진단 체크 시 보고서작성도 같은 날짜로 함께 체크됩니다</span>'
+      + '<span style="color:var(--ink3);font-size:11.5px;font-weight:400">— 두 일정은 서로 독립적으로 체크됩니다</span>'
       + '</div>'
 
       + '<div id="cal-container"></div>'
@@ -4303,21 +4303,13 @@ window.EdiagMail = {
     var ms = d.memberSchedules || (d.memberSchedules = {});
     if(!ms[hrId]) ms[hrId] = {siteDates:[], reportDates:[]};
     var field = clickedField==='site' ? 'siteDates' : 'reportDates';
-    var otherField = clickedField==='site' ? 'reportDates' : 'siteDates';
     var arr = ms[hrId][field] || (ms[hrId][field] = []);
     var idx = arr.indexOf(ds);
+    // 현장진단·보고서작성은 완전히 독립적으로 체크/해제 (서로 영향 없음)
     if(el.checked){
       if(idx===-1) arr.push(ds);
-      // 현장진단 체크 시 보고서작성도 같은 날짜로 함께 체크 (반대 방향도 동일)
-      var otherArr = ms[hrId][otherField] || (ms[hrId][otherField] = []);
-      if(otherArr.indexOf(ds)===-1) otherArr.push(ds);
-      // 화면에 두 체크박스가 모두 즉시 체크되도록 동기화
-      var otherFieldName = clickedField==='site' ? 'report' : 'site';
-      var otherEl = document.querySelector('.cal-chk-'+otherFieldName+'-'+ds+'[data-hr="'+hrId+'"]');
-      if(otherEl && !otherEl.checked) otherEl.checked = true;
     } else {
       if(idx!==-1) arr.splice(idx,1);
-      // 체크 해제 시에는 반대쪽 일정은 그대로 유지 (해제는 각 체크박스에서 개별적으로)
     }
     EdiagMail._renderMemberSummary();
   },
