@@ -2801,6 +2801,16 @@ const PinAuth={
     var profRes=await supa.from('staff_profiles').select('role,email').eq('name',name);
     var role=(profRes.data&&profRes.data.length>0&&profRes.data[0].role)?profRes.data[0].role:'일반직원';
     var email=(profRes.data&&profRes.data.length>0&&profRes.data[0].email)?profRes.data[0].email:'';
+
+    // 관리자/부관리자는 보안상 PIN 등록 자체를 막고 이메일 로그인으로만 접근하도록 안내
+    if(role==='관리자' || role==='부관리자'){
+      errEl.textContent='관리자/부관리자 계정은 PIN 로그인을 사용할 수 없습니다. 하단 "관리자" 버튼을 눌러 이메일로 로그인해주세요.';
+      errEl.style.display='block';
+      this._setupPin=''; this._confirmPin=''; this._step='setup';
+      this._dots('setup-dots',0); this._dots('confirm-dots',0);
+      return;
+    }
+
     var localUser={userId:hr.id,name:hr.name,role:role,email:email,rank:hr.rank,dept:hr.dept};
     var pinHash=this._hash(this._setupPin,hr.id);
     // 즉시 로그인 가능하게 하지 않고, 관리자 승인 대기 상태로 등록
@@ -4174,10 +4184,11 @@ window.EdiagMail = {
       + '<span style="float:right;color:var(--ink2)">' + esc(c&&c.grade?c.grade+' 등급':'') + '</span>'
       + '</div>'
 
-      // 탭
-      + '<div style="display:flex;gap:6px;margin-bottom:10px">'
-      + '<button onclick="EdiagMail._switchCalTab(\'site\')" style="flex:1;padding:8px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:1.5px solid ' + (EdiagMail._calTab==='site'?'#0e5e54':'var(--line)') + ';background:' + (EdiagMail._calTab==='site'?'#0e5e54':'#fff') + ';color:' + (EdiagMail._calTab==='site'?'#fff':'var(--ink)') + '">📍 현장진단 일정</button>'
-      + '<button onclick="EdiagMail._switchCalTab(\'report\')" style="flex:1;padding:8px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:1.5px solid ' + (EdiagMail._calTab==='report'?'#3a57c9':'var(--line)') + ';background:' + (EdiagMail._calTab==='report'?'#3a57c9':'#fff') + ';color:' + (EdiagMail._calTab==='report'?'#fff':'var(--ink)') + '">📝 보고서작성 일정</button>'
+      // 범례 (한 달력에서 현장진단·보고서작성 모두 한눈에 확인/체크)
+      + '<div style="display:flex;align-items:center;gap:16px;padding:9px 12px;background:#f7f9f8;border-radius:8px;margin-bottom:10px;font-size:12.5px;font-weight:600">'
+      + '<span style="display:flex;align-items:center;gap:5px;color:#d32f2f"><input type="checkbox" checked disabled style="width:12px;height:12px;accent-color:#d32f2f">📍 현장진단</span>'
+      + '<span style="display:flex;align-items:center;gap:5px;color:#1565c0"><input type="checkbox" checked disabled style="width:12px;height:12px;accent-color:#1565c0">📝 보고서작성</span>'
+      + '<span style="color:var(--ink3);font-size:11.5px;font-weight:400">— 현장진단 체크 시 보고서작성도 같은 날짜로 함께 체크됩니다</span>'
       + '</div>'
 
       + '<div id="cal-container"></div>'
@@ -4214,8 +4225,7 @@ window.EdiagMail = {
     if(d.leader && d.leader.hrId) members.push({hrId:d.leader.hrId, name:d.leader.name, role:'팀장'});
     (d.members||[]).forEach(function(m){ members.push({hrId:m.hrId, name:m.name, role:'팀원'}); });
     var ms = d.memberSchedules || {};
-    var dateField = EdiagMail._calTab==='site' ? 'siteDates' : 'reportDates';
-    var color = EdiagMail._calTab==='site' ? '#0e5e54' : '#3a57c9';
+    var color = '#0e5e54';
 
     var y = EdiagMail._calYear, m = EdiagMail._calMonth;
     var firstDay = new Date(y, m-1, 1);
@@ -4234,22 +4244,30 @@ window.EdiagMail = {
     for(var i=0;i<startWeekday;i++) cells += '<div></div>';
     for(var day=1; day<=lastDate; day++){
       var ds = dateStr(day);
-      var allChecked = members.length>0 && members.every(function(mem){
-        var arr = (ms[mem.hrId] && ms[mem.hrId][dateField]) || [];
+      var siteAllChecked = members.length>0 && members.every(function(mem){
+        var arr = (ms[mem.hrId] && ms[mem.hrId].siteDates) || [];
         return arr.indexOf(ds) !== -1;
       });
+      var reportAllChecked = members.length>0 && members.every(function(mem){
+        var arr = (ms[mem.hrId] && ms[mem.hrId].reportDates) || [];
+        return arr.indexOf(ds) !== -1;
+      });
+      // 각 구성원 줄에 현장진단(빨강)·보고서작성(파랑) 체크박스를 함께 표시 (탭 전환과 무관하게 항상 둘 다 보임)
       var checks = members.map(function(mem){
-        var arr = (ms[mem.hrId] && ms[mem.hrId][dateField]) || [];
-        var checked = arr.indexOf(ds) !== -1;
-        var roleColor = mem.role==='팀장' ? '#2e7d32' : '#1565c0';
-        return '<label style="display:flex;align-items:center;gap:3px;font-size:9.5px;color:'+roleColor+';cursor:pointer;white-space:nowrap;overflow:hidden">'
-          + '<input type="checkbox" class="cal-chk-'+ds+'" data-hr="'+mem.hrId+'" data-date="'+ds+'" onchange="EdiagMail._toggleDate(this)" '+(checked?'checked':'')+' style="width:11px;height:11px;cursor:pointer;flex:none">'
-          + '<span style="overflow:hidden;text-overflow:ellipsis">'+esc(mem.name)+'</span></label>';
+        var siteArr = (ms[mem.hrId] && ms[mem.hrId].siteDates) || [];
+        var reportArr = (ms[mem.hrId] && ms[mem.hrId].reportDates) || [];
+        var siteChecked = siteArr.indexOf(ds) !== -1;
+        var reportChecked = reportArr.indexOf(ds) !== -1;
+        return '<div style="display:flex;align-items:center;gap:4px;font-size:9.5px;white-space:nowrap;overflow:hidden;margin-bottom:1px">'
+          + '<input type="checkbox" class="cal-chk-site-'+ds+'" data-field="site" data-hr="'+mem.hrId+'" data-date="'+ds+'" onchange="EdiagMail._toggleDate(this)" '+(siteChecked?'checked':'')+' style="width:12px;height:12px;cursor:pointer;flex:none;accent-color:#d32f2f">'
+          + '<input type="checkbox" class="cal-chk-report-'+ds+'" data-field="report" data-hr="'+mem.hrId+'" data-date="'+ds+'" onchange="EdiagMail._toggleDate(this)" '+(reportChecked?'checked':'')+' style="width:12px;height:12px;cursor:pointer;flex:none;accent-color:#1565c0">'
+          + '<span style="overflow:hidden;text-overflow:ellipsis;color:var(--ink)">'+esc(mem.name)+'</span></div>';
       }).join('');
-      var allLabel = '<label style="display:flex;align-items:center;gap:3px;font-size:9px;color:var(--ink3);cursor:pointer;border-bottom:1px dashed var(--line2);padding-bottom:2px;margin-bottom:2px;font-weight:700">'
-        + '<input type="checkbox" data-date="'+ds+'" onchange="EdiagMail._toggleAllDate(this)" '+(allChecked?'checked':'')+' style="width:11px;height:11px;cursor:pointer;flex:none">'
-        + '<span>전체</span></label>';
-      cells += '<div style="border:1px solid var(--line2);border-radius:6px;padding:4px;min-height:78px;background:#fff">'
+      var allLabel = '<div style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--ink3);cursor:pointer;border-bottom:1px dashed var(--line2);padding-bottom:2px;margin-bottom:2px;font-weight:700">'
+        + '<input type="checkbox" data-field="site" data-date="'+ds+'" onchange="EdiagMail._toggleAllDate(this)" '+(siteAllChecked?'checked':'')+' style="width:12px;height:12px;cursor:pointer;flex:none;accent-color:#d32f2f">'
+        + '<input type="checkbox" data-field="report" data-date="'+ds+'" onchange="EdiagMail._toggleAllDate(this)" '+(reportAllChecked?'checked':'')+' style="width:12px;height:12px;cursor:pointer;flex:none;accent-color:#1565c0">'
+        + '<span>전체</span></div>';
+      cells += '<div style="border:1px solid var(--line2);border-radius:6px;padding:4px;min-height:'+(20+members.length*16)+'px;background:#fff">'
         + '<div style="font-size:11px;font-weight:700;color:var(--ink2);margin-bottom:3px">'+day+'</div>'
         + allLabel
         + checks
@@ -4279,22 +4297,27 @@ window.EdiagMail = {
   _toggleDate(el){
     var hrId = el.getAttribute('data-hr');
     var ds   = el.getAttribute('data-date');
+    var clickedField = el.getAttribute('data-field'); // 'site' 또는 'report'
     var d = State.ediag.find(function(x){ return x.contractId===EdiagMail._calContractId; });
     if(!d) return;
     var ms = d.memberSchedules || (d.memberSchedules = {});
     if(!ms[hrId]) ms[hrId] = {siteDates:[], reportDates:[]};
-    var field = EdiagMail._calTab==='site' ? 'siteDates' : 'reportDates';
-    var otherField = EdiagMail._calTab==='site' ? 'reportDates' : 'siteDates';
+    var field = clickedField==='site' ? 'siteDates' : 'reportDates';
+    var otherField = clickedField==='site' ? 'reportDates' : 'siteDates';
     var arr = ms[hrId][field] || (ms[hrId][field] = []);
     var idx = arr.indexOf(ds);
     if(el.checked){
       if(idx===-1) arr.push(ds);
-      // 같은 사람·같은 날짜는 다른 일정(현장진단/보고서작성)과 동시에 체크 불가 → 반대쪽 자동 해제
+      // 현장진단 체크 시 보고서작성도 같은 날짜로 함께 체크 (반대 방향도 동일)
       var otherArr = ms[hrId][otherField] || (ms[hrId][otherField] = []);
-      var oIdx = otherArr.indexOf(ds);
-      if(oIdx!==-1) otherArr.splice(oIdx,1);
+      if(otherArr.indexOf(ds)===-1) otherArr.push(ds);
+      // 화면에 두 체크박스가 모두 즉시 체크되도록 동기화
+      var otherFieldName = clickedField==='site' ? 'report' : 'site';
+      var otherEl = document.querySelector('.cal-chk-'+otherFieldName+'-'+ds+'[data-hr="'+hrId+'"]');
+      if(otherEl && !otherEl.checked) otherEl.checked = true;
     } else {
       if(idx!==-1) arr.splice(idx,1);
+      // 체크 해제 시에는 반대쪽 일정은 그대로 유지 (해제는 각 체크박스에서 개별적으로)
     }
     EdiagMail._renderMemberSummary();
   },
@@ -4302,8 +4325,9 @@ window.EdiagMail = {
   // 날짜별 "전체" 체크박스: 그 날의 모든 구성원 체크박스를 일괄 토글 (상호배타 동일 적용)
   _toggleAllDate(allEl){
     var ds = allEl.getAttribute('data-date');
+    var field = allEl.getAttribute('data-field'); // 'site' 또는 'report'
     var checked = allEl.checked;
-    var checkboxes = document.querySelectorAll('.cal-chk-'+ds);
+    var checkboxes = document.querySelectorAll('.cal-chk-'+field+'-'+ds);
     checkboxes.forEach(function(cb){
       if(cb.checked !== checked){
         cb.checked = checked;
@@ -4320,17 +4344,17 @@ window.EdiagMail = {
     if(d.leader && d.leader.hrId) members.push({hrId:d.leader.hrId, name:d.leader.name, role:'팀장'});
     (d.members||[]).forEach(function(m){ members.push({hrId:m.hrId, name:m.name, role:'팀원'}); });
     var ms = d.memberSchedules || {};
-    var field = EdiagMail._calTab==='site' ? 'siteDates' : 'reportDates';
-    var label = EdiagMail._calTab==='site' ? '현장진단' : '보고서작성';
 
     var rows = members.map(function(mem){
-      var arr = (ms[mem.hrId] && ms[mem.hrId][field]) || [];
+      var siteArr = (ms[mem.hrId] && ms[mem.hrId].siteDates) || [];
+      var reportArr = (ms[mem.hrId] && ms[mem.hrId].reportDates) || [];
       var roleTag = mem.role==='팀장'
         ? '<span style="background:#e8f5e9;color:#2e7d32;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700">팀장</span>'
         : '<span style="background:#e3f2fd;color:#1565c0;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700">팀원</span>';
       return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:12.5px">'
         + roleTag + ' <b>'+esc(mem.name)+'</b>'
-        + ' — '+label+' <b style="color:'+(arr.length?'var(--brand)':'var(--ink3)')+'">('+arr.length+'일)</b>'
+        + ' — <span style="color:#d32f2f">📍현장진단 <b>('+siteArr.length+'일)</b></span>'
+        + ' · <span style="color:#1565c0">📝보고서작성 <b>('+reportArr.length+'일)</b></span>'
         + '</div>';
     }).join('');
     document.getElementById('member-summary').innerHTML =
