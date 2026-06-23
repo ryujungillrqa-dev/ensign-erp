@@ -4499,6 +4499,9 @@ Views.equip = function(){
         value="${esc(equipFilter.q)}" oninput="equipSearchInput(event)" style="width:240px">
       <span class="sp"></span>
       <span id="equip-summary" style="font-size:12.5px;color:var(--ink2)"></span>
+      <button class="btn" onclick="Equip.template()">업로드 양식</button>
+      <label class="btn">엑셀 일괄등록<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="Equip.importXlsx(this)"></label>
+      <button class="btn" onclick="Equip.exportXlsx()">엑셀 내보내기</button>
       <button class="btn pri" onclick="Equip.edit()">+ 장비 등록</button>
     </div>
     <div id="equip-list" style="margin-top:4px"></div>`;
@@ -4633,6 +4636,96 @@ const Equip = {
       return;
     }
     _renderEquip();
+  },
+
+  /* 업로드 양식 다운로드 */
+  template(){
+    const sample = [{
+      '장비명':'열화상카메라', '장비번호':'EQ-001', 'SN':'SN12345',
+      '검교정이력':'2024-03-15 검교정 완료 (○○계측)', '구입년도':'2023',
+      '고장이력':'', '비고':'예시 행입니다. 지우고 입력하세요'
+    }];
+    const guide = XLSX.utils.aoa_to_sheet([
+      ['엔자인 ERP 진단장비현황 일괄등록 양식 안내'],[''],
+      ['열 이름','설명'],
+      ['장비명','필수 입력'],
+      ['장비번호','선택 입력. 예: EQ-001'],
+      ['SN','시리얼번호, 선택 입력'],
+      ['검교정이력','선택 입력. 자유 텍스트'],
+      ['구입년도','선택 입력. 예: 2023'],
+      ['고장이력','선택 입력. 자유 텍스트'],
+      ['비고','선택 입력'],[''],
+      ['※ 장비명+SN이 모두 일치하는 기존 행이 있으면 덮어씁니다 (없으면 신규 등록)']
+    ]);
+    guide['!cols'] = [{wch:12},{wch:70}];
+    const ws = XLSX.utils.json_to_sheet(sample);
+    ws['!cols'] = [{wch:18},{wch:14},{wch:16},{wch:30},{wch:10},{wch:30},{wch:24}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '장비입력');
+    XLSX.utils.book_append_sheet(wb, guide, '작성안내');
+    XLSX.writeFile(wb, '엔자인_진단장비현황등록양식.xlsx');
+  },
+
+  /* 일괄등록 엑셀 업로드 */
+  importXlsx(input){
+    const file = input.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async e=>{
+      try{
+        const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
+        const sheetName = wb.SheetNames.includes('장비입력') ? '장비입력' : wb.SheetNames[0];
+        const json = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {defval:''});
+        if(!State.equip) State.equip = [];
+        let ok=0, skip=0;
+        json.forEach(r=>{
+          const keys = Object.keys(r);
+          const get = names=>{ const k=keys.find(k=>names.some(n=>k.replace(/\s/g,'').includes(n))); return k!=null?String(r[k]||'').trim():''; };
+          const equipName = get(['장비명']);
+          if(!equipName){ if(keys.some(k=>String(r[k]).trim()!=='')) skip++; return; }
+          const sn = get(['SN','시리얼']);
+          const data = {
+            equipName,
+            equipNo: get(['장비번호']),
+            sn,
+            calibrationHistory: get(['검교정이력','검교정']),
+            purchaseYear: get(['구입년도','구입년','년도']),
+            failureHistory: get(['고장이력','고장']),
+            memo: get(['비고','메모'])
+          };
+          const existIdx = State.equip.findIndex(e=>e.equipName===equipName && (e.sn||'')===sn);
+          if(existIdx>=0){ State.equip[existIdx] = {...State.equip[existIdx], ...data}; }
+          else { data.id = DB.uid(); State.equip.push(data); }
+          ok++;
+        });
+        if(ok===0){ toast('처리할 데이터가 없습니다'); input.value=''; return; }
+        toast('저장 중...');
+        try{
+          await State.saveAll();
+          toast('✅ '+ok+'건 저장 완료'+(skip?' · 건너뜀 '+skip+'건':''));
+        }catch(saveErr){
+          toast('❌ 저장 실패: '+saveErr.message);
+          input.value=''; return;
+        }
+        _renderEquip();
+      }catch(err){ toast('가져오기 실패: 파일 형식을 확인하세요'); console.error(err); }
+      input.value='';
+    };
+    reader.readAsArrayBuffer(file);
+  },
+
+  /* 엑셀 내보내기 */
+  exportXlsx(){
+    const rows = (State.equip||[]).map(eq=>({
+      '장비명': eq.equipName||'', '장비번호': eq.equipNo||'', 'SN': eq.sn||'',
+      '검교정이력': eq.calibrationHistory||'', '구입년도': eq.purchaseYear||'',
+      '고장이력': eq.failureHistory||'', '비고': eq.memo||''
+    }));
+    if(!rows.length){ toast('내보낼 데이터가 없습니다'); return; }
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{wch:18},{wch:14},{wch:16},{wch:30},{wch:10},{wch:30},{wch:24}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '진단장비현황');
+    XLSX.writeFile(wb, `엔자인_진단장비현황_${todayStr()}.xlsx`);
   }
 };
 </script>
