@@ -2706,7 +2706,11 @@ const PinAuth={
   _setupPin:'',_confirmPin:'',_loginPin:'',_step:'setup',_localUser:null,
   async init(){
     try{this._localUser=JSON.parse(localStorage.getItem('ensign_local_user')||'null');}catch(e){}
-    if(this._localUser){this.showPinLogin();}else{this.showSetup();}
+    var pending=null;
+    try{pending=JSON.parse(localStorage.getItem('ensign_pending_user')||'null');}catch(e){}
+    if(this._localUser){this.showPinLogin();}
+    else if(pending){this._showPendingScreen(pending.name);}
+    else{this.showSetup();}
   },
   showSetup(){
     document.getElementById('pin-setup').style.display='block';
@@ -2799,10 +2803,67 @@ const PinAuth={
     var email=(profRes.data&&profRes.data.length>0&&profRes.data[0].email)?profRes.data[0].email:'';
     var localUser={userId:hr.id,name:hr.name,role:role,email:email,rank:hr.rank,dept:hr.dept};
     var pinHash=this._hash(this._setupPin,hr.id);
-    localStorage.setItem('ensign_local_user',JSON.stringify(Object.assign({},localUser,{pinHash:pinHash})));
-    localStorage.setItem('ensign_pin_fail','0');
-    this._localUser=localUser;
-    this.showPinLogin();
+    // 즉시 로그인 가능하게 하지 않고, 관리자 승인 대기 상태로 등록
+    var deviceLabel = (navigator.platform||'') + ' / ' + (navigator.userAgent||'').slice(0,60);
+    try{
+      await supa.from('pending_devices').insert({
+        hr_id: hr.id, name: hr.name, pin_hash: pinHash,
+        device_info: deviceLabel, status: '대기', requested_at: new Date().toISOString()
+      });
+    }catch(e){ console.error('승인 요청 등록 오류:', e); }
+    localStorage.setItem('ensign_pending_user', JSON.stringify(Object.assign({},localUser,{pinHash:pinHash})));
+    this._localUser = null;
+    this._showPendingScreen(name);
+  },
+
+  // 관리자 승인 대기 안내 화면
+  _showPendingScreen(name){
+    document.getElementById('pin-setup').style.display='none';
+    document.getElementById('pin-login').style.display='none';
+    document.getElementById('email-login').style.display='none';
+    var box = document.getElementById('pending-screen');
+    if(!box){
+      box = document.createElement('div');
+      box.id = 'pending-screen';
+      box.style.cssText = 'background:#fff;border-radius:16px;padding:40px 36px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,.25);text-align:center';
+      document.getElementById('login-screen').appendChild(box);
+    }
+    box.style.display = 'block';
+    box.innerHTML = '<div style="font-size:40px;margin-bottom:12px">🔒</div>'
+      + '<div style="font-size:16px;font-weight:800;color:var(--ink);margin-bottom:8px">관리자 승인 대기중</div>'
+      + '<div style="font-size:13px;color:var(--ink2);line-height:1.6;margin-bottom:20px">'+esc(name)+'님의 PIN 설정이 등록되었습니다.<br>관리자 또는 부관리자의 승인 후<br>로그인하실 수 있습니다.</div>'
+      + '<button onclick="PinAuth._checkApproval()" style="width:100%;background:#0e5e54;color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">승인 확인하기</button>'
+      + '<button onclick="PinAuth._cancelPending()" style="width:100%;background:#f0f5f3;border:1px solid #d1dbd9;border-radius:8px;padding:9px;font-size:12px;color:#7d918c;cursor:pointer">취소하고 처음으로</button>';
+  },
+
+  async _checkApproval(){
+    var pending = JSON.parse(localStorage.getItem('ensign_pending_user')||'null');
+    if(!pending){ this._cancelPending(); return; }
+    var res = await supa.from('pending_devices').select('status').eq('hr_id', pending.userId).eq('pin_hash', pending.pinHash).order('requested_at',{ascending:false}).limit(1);
+    var status = (res.data && res.data[0]) ? res.data[0].status : '대기';
+    if(status === '승인'){
+      localStorage.setItem('ensign_local_user', JSON.stringify(pending));
+      localStorage.removeItem('ensign_pending_user');
+      localStorage.setItem('ensign_pin_fail','0');
+      this._localUser = pending;
+      var box = document.getElementById('pending-screen');
+      if(box) box.style.display='none';
+      toast('✅ 승인되었습니다. 로그인해주세요.');
+      this.showPinLogin();
+    } else if(status === '거절'){
+      localStorage.removeItem('ensign_pending_user');
+      toast('❌ 승인이 거절되었습니다. 관리자에게 문의하세요.');
+      this._cancelPending();
+    } else {
+      toast('아직 승인 대기중입니다.');
+    }
+  },
+
+  _cancelPending(){
+    localStorage.removeItem('ensign_pending_user');
+    var box = document.getElementById('pending-screen');
+    if(box) box.style.display='none';
+    this.showSetup();
   },
   async _verifyPin(){
     var errEl=document.getElementById('pin-error');errEl.style.display='none';
@@ -3323,11 +3384,54 @@ Views.auth = function(){
     <div class="toolbar sticky-toolbar">
       <button class="btn ${authTab==='role'?'pri':''}" onclick="authTab='role';Views.auth()">역할별 권한 설정</button>
       <button class="btn ${authTab==='user'?'pri':''}" onclick="authTab='user';Views.auth()">직원별 역할 배정</button>
+      <button class="btn ${authTab==='pending'?'pri':''}" onclick="authTab='pending';Views.auth()">🔒 기기 승인 대기</button>
       <span class="sp"></span>
     </div>
     <div id="auth-content" style="margin-top:4px"></div>`;
-  authTab==='role' ? _renderAuthRole() : _renderAuthUser();
+  if(authTab==='role') _renderAuthRole();
+  else if(authTab==='user') _renderAuthUser();
+  else _renderPendingDevices();
 };
+
+/* ── 기기 승인 대기 목록 ── */
+async function _renderPendingDevices(){
+  const box = document.getElementById('auth-content');
+  if(!box) return;
+  box.innerHTML = '<div class="card"><div class="bd"><div class="empty">로딩중...</div></div></div>';
+  const res = await supa.from('pending_devices').select('*').order('requested_at',{ascending:false});
+  const list = res.data || [];
+  if(!list.length){
+    box.innerHTML = '<div class="card"><div class="bd"><div class="empty"><b>승인 대기중인 요청이 없습니다</b></div></div></div>';
+    return;
+  }
+  const rows = list.map(p=>{
+    const statusTag = p.status==='승인' ? '<span class="tag t2">승인됨</span>'
+      : p.status==='거절' ? '<span class="tag gray">거절됨</span>'
+      : '<span class="tag t4">대기중</span>';
+    const dt = p.requested_at ? new Date(p.requested_at).toLocaleString('ko-KR') : '';
+    const actions = p.status==='대기'
+      ? `<button class="btn sm pri" onclick="Auth.approveDevice('${p.id}')">승인</button>
+         <button class="btn sm dgr" onclick="Auth.rejectDevice('${p.id}')">거절</button>`
+      : `<button class="btn sm" onclick="Auth.deletePending('${p.id}')">삭제</button>`;
+    return `<tr>
+      <td>${esc(p.name)}</td>
+      <td style="font-size:11px;color:var(--ink3)">${esc(p.device_info||'')}</td>
+      <td style="font-size:12px">${dt}</td>
+      <td class="ctr">${statusTag}</td>
+      <td class="ctr">${actions}</td>
+    </tr>`;
+  }).join('');
+  box.innerHTML = `
+    <div class="card">
+      <div class="hd"><h2>기기 승인 대기 목록 <span style="font-size:11px;color:var(--ink3);font-weight:500">새 기기에서 PIN을 설정하면 여기에 표시됩니다</span></h2></div>
+      <div class="bd np">
+        <table class="grid">
+          <thead><tr><th>이름</th><th>기기정보</th><th>요청일시</th><th class="ctr">상태</th><th class="ctr">처리</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
 
 /* ── 역할별 권한 설정 ── */
 function _renderAuthRole(){
@@ -3429,6 +3533,26 @@ function _renderAuthUser(){
 }
 
 const Auth = {
+  // 기기 승인 (관리자/부관리자 전용)
+  async approveDevice(id){
+    if(!confirm('이 기기의 PIN 등록을 승인하시겠습니까?')) return;
+    const {error} = await supa.from('pending_devices').update({status:'승인', approved_at:new Date().toISOString()}).eq('id', id);
+    if(error){ toast('승인 실패: '+error.message); return; }
+    toast('✅ 승인되었습니다');
+    _renderPendingDevices();
+  },
+  async rejectDevice(id){
+    if(!confirm('이 요청을 거절하시겠습니까?')) return;
+    const {error} = await supa.from('pending_devices').update({status:'거절'}).eq('id', id);
+    if(error){ toast('거절 처리 실패: '+error.message); return; }
+    toast('요청이 거절되었습니다');
+    _renderPendingDevices();
+  },
+  async deletePending(id){
+    if(!confirm('이 기록을 목록에서 삭제할까요?')) return;
+    await supa.from('pending_devices').delete().eq('id', id);
+    _renderPendingDevices();
+  },
   setPerm(role, menu, val){
     if(!State.auth.roles[role]) return;
     State.auth.roles[role].perms[menu] = val;
@@ -4017,7 +4141,7 @@ function _ediagOverlaps(s1, e1, s2, e2){
 
 window.EdiagMail = {
   /* 일정 등록 모달 */
-  editSchedule(contractId){
+  editSchedule(contractId, tab){
     var c = contractById(contractId);
     var d = State.ediag.find(function(x){ return x.contractId===contractId; });
     if(!d){ toast('팀 구성을 먼저 완료해주세요'); return; }
@@ -4026,58 +4150,44 @@ window.EdiagMail = {
     var members = [];
     if(d.leader && d.leader.hrId) members.push({hrId:d.leader.hrId, name:d.leader.name, role:'팀장'});
     (d.members||[]).forEach(function(m){ members.push({hrId:m.hrId, name:m.name, role:'팀원'}); });
+    if(!members.length){ toast('팀 구성원이 없습니다'); return; }
 
-    // 구성원별 기존 일정
+    EdiagMail._calTab = tab || EdiagMail._calTab || 'site'; // 'site'=현장진단, 'report'=보고서작성
+    EdiagMail._calContractId = contractId;
+    EdiagMail._calYear  = EdiagMail._calYear  || new Date().getFullYear();
+    EdiagMail._calMonth = EdiagMail._calMonth || (new Date().getMonth()+1);
+
     var ms = d.memberSchedules || {};
+    // 기존 데이터를 날짜배열 구조로 정규화 (이전 startDate~endDate 방식과의 하위호환)
+    members.forEach(function(m){
+      if(!ms[m.hrId]) ms[m.hrId] = {};
+      if(!ms[m.hrId].siteDates)   ms[m.hrId].siteDates   = ms[m.hrId].siteDates   || [];
+      if(!ms[m.hrId].reportDates) ms[m.hrId].reportDates = ms[m.hrId].reportDates || [];
+    });
+    d.memberSchedules = ms;
 
-    // 구성원별 날짜 행
-    var memberRowsHtml = members.map(function(m){
-      var mS = ms[m.hrId] ? (ms[m.hrId].startDate||d.startDate||'') : (d.startDate||'');
-      var mE = ms[m.hrId] ? (ms[m.hrId].endDate||d.endDate||'')     : (d.endDate||'');
-      var roleTag = m.role==='팀장'
-        ? '<span style="background:#e8f5e9;color:#2e7d32;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700">팀장</span>'
-        : '<span style="background:#e3f2fd;color:#1565c0;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700">팀원</span>';
-      return '<tr>'
-        + '<td style="white-space:nowrap">' + roleTag + ' <b>' + esc(m.name) + '</b></td>'
-        + '<td><input type="date" id="ms-s-' + m.hrId + '" value="' + mS + '" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:13px"></td>'
-        + '<td><input type="date" id="ms-e-' + m.hrId + '" value="' + mE + '" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:13px"></td>'
-        + '</tr>';
-    }).join('');
+    var ROLE_COLOR = { '팀장':'#2e7d32', '팀원':'#1565c0' };
 
-    // 모달 body
     var modalBody = ''
-      + '<div style="padding:10px 14px;background:var(--brand-soft);border-radius:8px;font-size:13px;margin-bottom:14px">'
+      + '<div style="padding:10px 14px;background:var(--brand-soft);border-radius:8px;font-size:13px;margin-bottom:12px">'
       + '<b>' + esc(c?c.no:'') + ' · ' + esc(c?c.name:'') + ' · ' + esc(c?c.client:'') + '</b>'
       + '<span style="float:right;color:var(--ink2)">' + esc(c&&c.grade?c.grade+' 등급':'') + '</span>'
       + '</div>'
 
-      // 팀 전체 일정
-      + '<div style="border:2px solid var(--brand);border-radius:10px;padding:14px;margin-bottom:14px">'
-      + '<div style="font-size:13px;font-weight:800;color:var(--brand);margin-bottom:10px">📅 팀 전체 일정'
-      + '<span style="font-size:11px;color:var(--ink3);font-weight:400;margin-left:8px">입력하면 구성원 일정에 자동 반영</span></div>'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:flex-end">'
-      + '<div><div style="font-size:12px;color:var(--ink2);margin-bottom:4px">시작일</div>'
-      + '<input type="date" id="em-start" value="' + esc(d.startDate||'') + '" onchange="window._emSyncAll()" style="width:100%;border:1.5px solid var(--brand);border-radius:7px;padding:6px 8px;font-size:13px"></div>'
-      + '<div><div style="font-size:12px;color:var(--ink2);margin-bottom:4px">종료일</div>'
-      + '<input type="date" id="em-end" value="' + esc(d.endDate||'') + '" onchange="window._emSyncAll()" style="width:100%;border:1.5px solid var(--brand);border-radius:7px;padding:6px 8px;font-size:13px"></div>'
-      + '<button onclick="window._emSyncAll()" style="background:var(--brand);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:13px;cursor:pointer;white-space:nowrap">↓ 전체 적용</button>'
-      + '</div></div>'
+      // 탭
+      + '<div style="display:flex;gap:6px;margin-bottom:10px">'
+      + '<button onclick="EdiagMail._switchCalTab(\'site\')" style="flex:1;padding:8px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:1.5px solid ' + (EdiagMail._calTab==='site'?'#0e5e54':'var(--line)') + ';background:' + (EdiagMail._calTab==='site'?'#0e5e54':'#fff') + ';color:' + (EdiagMail._calTab==='site'?'#fff':'var(--ink)') + '">📍 현장진단 일정</button>'
+      + '<button onclick="EdiagMail._switchCalTab(\'report\')" style="flex:1;padding:8px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:1.5px solid ' + (EdiagMail._calTab==='report'?'#3a57c9':'var(--line)') + ';background:' + (EdiagMail._calTab==='report'?'#3a57c9':'#fff') + ';color:' + (EdiagMail._calTab==='report'?'#fff':'var(--ink)') + '">📝 보고서작성 일정</button>'
+      + '</div>'
 
-      // 구성원별 일정
-      + '<div style="border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px">'
-      + '<div style="background:#f7f9f8;padding:9px 14px;font-size:13px;font-weight:700;border-bottom:1px solid var(--line)">👥 구성원별 일정</div>'
-      + '<table style="width:100%;border-collapse:collapse">'
-      + '<thead><tr style="background:#f7f9f8">'
-      + '<th style="padding:7px 12px;text-align:left;font-size:12px;width:110px;border-bottom:1px solid var(--line)">구성원</th>'
-      + '<th style="padding:7px 12px;text-align:left;font-size:12px;border-bottom:1px solid var(--line)">시작일</th>'
-      + '<th style="padding:7px 12px;text-align:left;font-size:12px;border-bottom:1px solid var(--line)">종료일</th>'
-      + '</tr></thead>'
-      + '<tbody>' + memberRowsHtml + '</tbody>'
-      + '</table></div>'
+      + '<div id="cal-container"></div>'
+
+      // 구성원별 투입일수 요약
+      + '<div id="member-summary" style="margin-top:10px"></div>'
 
       // 비고
-      + '<div style="margin-bottom:4px;font-size:12px;color:var(--ink2)">비고</div>'
-      + '<textarea id="em-memo" rows="2" style="width:100%;border:1px solid var(--line);border-radius:7px;padding:8px;font-size:13px;resize:vertical">' + esc(d.memo||'') + '</textarea>'
+      + '<div style="margin-top:10px"><div style="font-size:12px;color:var(--ink2);margin-bottom:4px">비고</div>'
+      + '<textarea id="em-memo" rows="2" style="width:100%;border:1px solid var(--line);border-radius:7px;padding:8px;font-size:13px;resize:vertical">' + esc(d.memo||'') + '</textarea></div>'
 
       // 버튼
       + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">'
@@ -4086,29 +4196,155 @@ window.EdiagMail = {
       + '<button onclick="EdiagMail.saveSchedule(\'' + contractId + '\')" style="padding:7px 18px;border:1.5px solid #0a4a42;border-radius:7px;background:#0e5e54;color:#fff;font-weight:800;cursor:pointer;font-size:13px">💾 일정 저장</button>'
       + '</div>';
 
-    // 전체 적용 함수 등록
-    window._emSyncAll = function(){
-      var s = (document.getElementById('em-start')||{}).value||'';
-      var e = (document.getElementById('em-end')||{}).value||'';
-      document.querySelectorAll('[id^="ms-s-"]').forEach(function(el){ if(s) el.value=s; });
-      document.querySelectorAll('[id^="ms-e-"]').forEach(function(el){ if(e) el.value=e; });
-    };
-
     UI.openModal('일정 등록 — ' + esc(c?c.no:''), modalBody, []);
+    EdiagMail._renderCalendar();
   },
+
+  _switchCalTab(tab){
+    EdiagMail._calTab = tab;
+    EdiagMail.editSchedule(EdiagMail._calContractId, tab);
+  },
+
+  // 달력 렌더링 (해당 탭의 일정만 표시, 날짜칸 안에 구성원 체크박스)
+  _renderCalendar(){
+    var contractId = EdiagMail._calContractId;
+    var d = State.ediag.find(function(x){ return x.contractId===contractId; });
+    if(!d) return;
+    var members = [];
+    if(d.leader && d.leader.hrId) members.push({hrId:d.leader.hrId, name:d.leader.name, role:'팀장'});
+    (d.members||[]).forEach(function(m){ members.push({hrId:m.hrId, name:m.name, role:'팀원'}); });
+    var ms = d.memberSchedules || {};
+    var dateField = EdiagMail._calTab==='site' ? 'siteDates' : 'reportDates';
+    var color = EdiagMail._calTab==='site' ? '#0e5e54' : '#3a57c9';
+
+    var y = EdiagMail._calYear, m = EdiagMail._calMonth;
+    var firstDay = new Date(y, m-1, 1);
+    var lastDate = new Date(y, m, 0).getDate();
+    var startWeekday = firstDay.getDay(); // 0=일
+
+    function pad(n){ return n<10 ? '0'+n : ''+n; }
+    function dateStr(day){ return y+'-'+pad(m)+'-'+pad(day); }
+
+    var weekdayRow = ['일','월','화','수','목','금','토'].map(function(w,i){
+      var c = i===0 ? '#d32f2f' : (i===6 ? '#1565c0' : 'var(--ink2)');
+      return '<div style="text-align:center;font-size:11px;font-weight:700;color:'+c+';padding:4px 0">'+w+'</div>';
+    }).join('');
+
+    var cells = '';
+    for(var i=0;i<startWeekday;i++) cells += '<div></div>';
+    for(var day=1; day<=lastDate; day++){
+      var ds = dateStr(day);
+      var allChecked = members.length>0 && members.every(function(mem){
+        var arr = (ms[mem.hrId] && ms[mem.hrId][dateField]) || [];
+        return arr.indexOf(ds) !== -1;
+      });
+      var checks = members.map(function(mem){
+        var arr = (ms[mem.hrId] && ms[mem.hrId][dateField]) || [];
+        var checked = arr.indexOf(ds) !== -1;
+        var roleColor = mem.role==='팀장' ? '#2e7d32' : '#1565c0';
+        return '<label style="display:flex;align-items:center;gap:3px;font-size:9.5px;color:'+roleColor+';cursor:pointer;white-space:nowrap;overflow:hidden">'
+          + '<input type="checkbox" class="cal-chk-'+ds+'" data-hr="'+mem.hrId+'" data-date="'+ds+'" onchange="EdiagMail._toggleDate(this)" '+(checked?'checked':'')+' style="width:11px;height:11px;cursor:pointer;flex:none">'
+          + '<span style="overflow:hidden;text-overflow:ellipsis">'+esc(mem.name)+'</span></label>';
+      }).join('');
+      var allLabel = '<label style="display:flex;align-items:center;gap:3px;font-size:9px;color:var(--ink3);cursor:pointer;border-bottom:1px dashed var(--line2);padding-bottom:2px;margin-bottom:2px;font-weight:700">'
+        + '<input type="checkbox" data-date="'+ds+'" onchange="EdiagMail._toggleAllDate(this)" '+(allChecked?'checked':'')+' style="width:11px;height:11px;cursor:pointer;flex:none">'
+        + '<span>전체</span></label>';
+      cells += '<div style="border:1px solid var(--line2);border-radius:6px;padding:4px;min-height:78px;background:#fff">'
+        + '<div style="font-size:11px;font-weight:700;color:var(--ink2);margin-bottom:3px">'+day+'</div>'
+        + allLabel
+        + checks
+        + '</div>';
+    }
+
+    var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+      + '<button onclick="EdiagMail._calNav(-1)" style="border:1px solid var(--line);border-radius:6px;background:#fff;padding:4px 10px;cursor:pointer;font-size:13px">◀</button>'
+      + '<div style="font-weight:800;font-size:14px;color:'+color+'">'+y+'년 '+m+'월</div>'
+      + '<button onclick="EdiagMail._calNav(1)" style="border:1px solid var(--line);border-radius:6px;background:#fff;padding:4px 10px;cursor:pointer;font-size:13px">▶</button>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:2px">'+weekdayRow+'</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;max-height:360px;overflow-y:auto">'+cells+'</div>';
+
+    document.getElementById('cal-container').innerHTML = html;
+    EdiagMail._renderMemberSummary();
+  },
+
+  _calNav(delta){
+    EdiagMail._calMonth += delta;
+    if(EdiagMail._calMonth > 12){ EdiagMail._calMonth = 1; EdiagMail._calYear++; }
+    if(EdiagMail._calMonth < 1){ EdiagMail._calMonth = 12; EdiagMail._calYear--; }
+    EdiagMail._renderCalendar();
+  },
+
+  // 체크박스 토글: 메모리(d.memberSchedules)에 날짜 추가/제거
+  _toggleDate(el){
+    var hrId = el.getAttribute('data-hr');
+    var ds   = el.getAttribute('data-date');
+    var d = State.ediag.find(function(x){ return x.contractId===EdiagMail._calContractId; });
+    if(!d) return;
+    var ms = d.memberSchedules || (d.memberSchedules = {});
+    if(!ms[hrId]) ms[hrId] = {siteDates:[], reportDates:[]};
+    var field = EdiagMail._calTab==='site' ? 'siteDates' : 'reportDates';
+    var otherField = EdiagMail._calTab==='site' ? 'reportDates' : 'siteDates';
+    var arr = ms[hrId][field] || (ms[hrId][field] = []);
+    var idx = arr.indexOf(ds);
+    if(el.checked){
+      if(idx===-1) arr.push(ds);
+      // 같은 사람·같은 날짜는 다른 일정(현장진단/보고서작성)과 동시에 체크 불가 → 반대쪽 자동 해제
+      var otherArr = ms[hrId][otherField] || (ms[hrId][otherField] = []);
+      var oIdx = otherArr.indexOf(ds);
+      if(oIdx!==-1) otherArr.splice(oIdx,1);
+    } else {
+      if(idx!==-1) arr.splice(idx,1);
+    }
+    EdiagMail._renderMemberSummary();
+  },
+
+  // 날짜별 "전체" 체크박스: 그 날의 모든 구성원 체크박스를 일괄 토글 (상호배타 동일 적용)
+  _toggleAllDate(allEl){
+    var ds = allEl.getAttribute('data-date');
+    var checked = allEl.checked;
+    var checkboxes = document.querySelectorAll('.cal-chk-'+ds);
+    checkboxes.forEach(function(cb){
+      if(cb.checked !== checked){
+        cb.checked = checked;
+        EdiagMail._toggleDate(cb);
+      }
+    });
+  },
+
+  // 구성원별 투입일수 요약 (현재 탭 기준, 이름 옆에 (n일) 표시)
+  _renderMemberSummary(){
+    var d = State.ediag.find(function(x){ return x.contractId===EdiagMail._calContractId; });
+    if(!d) return;
+    var members = [];
+    if(d.leader && d.leader.hrId) members.push({hrId:d.leader.hrId, name:d.leader.name, role:'팀장'});
+    (d.members||[]).forEach(function(m){ members.push({hrId:m.hrId, name:m.name, role:'팀원'}); });
+    var ms = d.memberSchedules || {};
+    var field = EdiagMail._calTab==='site' ? 'siteDates' : 'reportDates';
+    var label = EdiagMail._calTab==='site' ? '현장진단' : '보고서작성';
+
+    var rows = members.map(function(mem){
+      var arr = (ms[mem.hrId] && ms[mem.hrId][field]) || [];
+      var roleTag = mem.role==='팀장'
+        ? '<span style="background:#e8f5e9;color:#2e7d32;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700">팀장</span>'
+        : '<span style="background:#e3f2fd;color:#1565c0;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700">팀원</span>';
+      return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:12.5px">'
+        + roleTag + ' <b>'+esc(mem.name)+'</b>'
+        + ' — '+label+' <b style="color:'+(arr.length?'var(--brand)':'var(--ink3)')+'">('+arr.length+'일)</b>'
+        + '</div>';
+    }).join('');
+    document.getElementById('member-summary').innerHTML =
+      '<div style="border-top:1px solid var(--line2);padding-top:8px">'+rows+'</div>';
+  },
+
 
 
   async saveSchedule(contractId){
     const c  = contractById(contractId);
     const me = State.ediag.find(e=>e.contractId===contractId);
     if(!me){ toast('팀 구성이 필요합니다'); return; }
-
-    const s1 = (document.getElementById('em-start')?.value||'').trim();
-    const e1 = (document.getElementById('em-end')?.value||'').trim();
     const memo = (document.getElementById('em-memo')?.value||'').trim();
-
-    if(!s1 && !e1){ toast('시작일 또는 종료일을 입력해주세요'); return; }
-    if(s1 && e1 && s1 > e1){ toast('시작일이 종료일보다 늦을 수 없습니다'); return; }
+    me.memo = memo;
 
     // 팀원 ID 수집 (팀장 포함)
     const myIds = [];
@@ -4120,41 +4356,29 @@ window.EdiagMail = {
     const nameMap = {};
     (State.hr||[]).forEach(function(h){ if(h && h.id) nameMap[h.id] = h.name||h.id; });
 
-    // 겹침 판별: 두 구간 [s1,e1], [s2,e2]가 하루라도 겹치면 true
-    // 단일 날짜면 같은 날 시작=종료로 취급
-    function dateOverlap(s1,e1,s2,e2){
-      var a = s1||e1, b = e1||s1, c2 = s2||e2, d2 = e2||s2;
-      if(!a || !c2) return false;
-      return a <= d2 && c2 <= b;
-    }
+    const ms = me.memberSchedules || {};
 
-    // 다른 계약과 비교 (구성원별 일정 기준)
+    // 겹침 검사: 날짜 배열 기준 (현장진단/보고서작성 모두 검사)
     var conflicts = [];
-    // 현재 모달에서 입력한 구성원별 일정 수집
-    var mySchedules = {};
-    myIds.forEach(function(hrId){
-      var mS = (document.getElementById('ms-s-'+hrId)||{}).value || s1;
-      var mE = (document.getElementById('ms-e-'+hrId)||{}).value || e1;
-      mySchedules[hrId] = {s: mS||s1, e: mE||e1};
-    });
     (State.ediag||[]).forEach(function(other){
       if(other.contractId === contractId) return;
       var otherIds = [];
       if(other.leader && other.leader.hrId) otherIds.push(other.leader.hrId);
       (other.members||[]).forEach(function(m){ if(m && m.hrId) otherIds.push(m.hrId); });
       var otherMs = other.memberSchedules || {};
+      var oc = contractById(other.contractId);
       myIds.forEach(function(myId){
         if(otherIds.indexOf(myId) === -1) return;
-        var mySch = mySchedules[myId] || {s:s1, e:e1};
-        var oSch  = otherMs[myId]
-          ? {s: otherMs[myId].startDate||other.startDate||'', e: otherMs[myId].endDate||other.endDate||''}
-          : {s: other.startDate||'', e: other.endDate||''};
-        if(!oSch.s && !oSch.e) return;
-        if(!dateOverlap(mySch.s, mySch.e, oSch.s, oSch.e)) return;
-        var oc = contractById(other.contractId);
-        var period = oSch.s + (oSch.e?' ~ '+oSch.e:'');
-        conflicts.push('[' + (oc?oc.no:'?') + '] ' + (oc?oc.name:'?')
-          + ' / ' + (nameMap[myId]||myId) + ' 일정 겹침 (' + period + ')');
+        ['siteDates','reportDates'].forEach(function(field){
+          var myArr = (ms[myId] && ms[myId][field]) || [];
+          var otherArr = (otherMs[myId] && otherMs[myId][field]) || [];
+          var overlap = myArr.filter(function(d){ return otherArr.indexOf(d) !== -1; });
+          if(overlap.length){
+            var label = field==='siteDates' ? '현장진단' : '보고서작성';
+            conflicts.push('[' + (oc?oc.no:'?') + '] ' + (oc?oc.name:'?')
+              + ' / ' + (nameMap[myId]||myId) + ' ' + label + ' 일정 겹침 (' + overlap.join(', ') + ')');
+          }
+        });
       });
     });
 
@@ -4163,20 +4387,16 @@ window.EdiagMail = {
       return;
     }
 
-    // 구성원별 일정 저장
-    var allMembers2 = [];
-    if(me.leader && me.leader.hrId) allMembers2.push(me.leader.hrId);
-    (me.members||[]).forEach(function(m){ if(m&&m.hrId) allMembers2.push(m.hrId); });
-    var newMs = {};
-    allMembers2.forEach(function(hrId){
-      var mS = (document.getElementById('ms-s-'+hrId)||{}).value||'';
-      var mE = (document.getElementById('ms-e-'+hrId)||{}).value||'';
-      newMs[hrId] = {startDate:mS, endDate:mE};
+    // 전체 기간(startDate/endDate)을 모든 구성원의 날짜 중 최소/최대로 자동 계산 (목록 화면 표시용)
+    var allDates = [];
+    myIds.forEach(function(hrId){
+      var s = ms[hrId] || {};
+      allDates = allDates.concat(s.siteDates||[], s.reportDates||[]);
     });
-    me.startDate = s1;
-    me.endDate   = e1;
-    me.memo      = memo;
-    me.memberSchedules = newMs;
+    allDates.sort();
+    me.startDate = allDates.length ? allDates[0] : '';
+    me.endDate   = allDates.length ? allDates[allDates.length-1] : '';
+
     toast('저장 중...');
     try{
       await State.saveAll();
@@ -4189,7 +4409,7 @@ window.EdiagMail = {
     Views.ediagmail();
   },
 
-  /* 메일 발송 (mailto) */
+    /* 메일 발송 (mailto) */
   exportExcel(contractId){
     // 이 업체의 팀구성 + 일정 엑셀 다운로드
     const c = contractById(contractId);
@@ -4213,8 +4433,16 @@ window.EdiagMail = {
       var ctotal = (Number(c.supply)||0)+(Number(c.vat)||0);
       var ms = d.memberSchedules||{};
 
+      function fmtDates(arr){
+        var sorted = (arr||[]).slice().sort();
+        if(!sorted.length) return '';
+        var first = sorted[0], last = sorted[sorted.length-1];
+        return first===last ? first : (first + ' ~ ' + last);
+      }
+
       // 팀장 행
       var leaderHr = State.hr.find(function(h){ return h.id===d.leader.hrId; });
+      var leaderMs = ms[d.leader.hrId] || {};
       rows.push({
         '계약번호': c.no||'',
         '업체명':   c.client||'',
@@ -4226,16 +4454,15 @@ window.EdiagMail = {
         '직급':     leaderHr ? (leaderHr.rank||'') : '',
         '핸드폰':   leaderHr ? (leaderHr.phone||'') : '',
         '이메일':   leaderHr ? (leaderHr.email||'') : '',
-        '팀 시작일': d.startDate||'',
-        '팀 종료일': d.endDate||'',
-        '개인 시작일': ms[d.leader.hrId] ? (ms[d.leader.hrId].startDate||'') : (d.startDate||''),
-        '개인 종료일': ms[d.leader.hrId] ? (ms[d.leader.hrId].endDate||'')   : (d.endDate||''),
+        '현장진단일정(일수)': leaderMs.siteDates&&leaderMs.siteDates.length ? (fmtDates(leaderMs.siteDates) + ' (' + leaderMs.siteDates.length + '일)') : '',
+        '보고서작성일정(일수)': leaderMs.reportDates&&leaderMs.reportDates.length ? (fmtDates(leaderMs.reportDates) + ' (' + leaderMs.reportDates.length + '일)') : '',
         '비고':     d.memo||''
       });
 
       // 팀원 행
       (d.members||[]).forEach(function(m){
         var mHr = State.hr.find(function(h){ return h.id===m.hrId; });
+        var mMs = ms[m.hrId] || {};
         rows.push({
           '계약번호': c.no||'',
           '업체명':   c.client||'',
@@ -4247,10 +4474,8 @@ window.EdiagMail = {
           '직급':     mHr ? (mHr.rank||'') : '',
           '핸드폰':   mHr ? (mHr.phone||'') : '',
           '이메일':   mHr ? (mHr.email||'') : '',
-          '팀 시작일': d.startDate||'',
-          '팀 종료일': d.endDate||'',
-          '개인 시작일': ms[m.hrId] ? (ms[m.hrId].startDate||'') : (d.startDate||''),
-          '개인 종료일': ms[m.hrId] ? (ms[m.hrId].endDate||'')   : (d.endDate||''),
+          '현장진단일정(일수)': mMs.siteDates&&mMs.siteDates.length ? (fmtDates(mMs.siteDates) + ' (' + mMs.siteDates.length + '일)') : '',
+          '보고서작성일정(일수)': mMs.reportDates&&mMs.reportDates.length ? (fmtDates(mMs.reportDates) + ' (' + mMs.reportDates.length + '일)') : '',
           '비고':     d.memo||''
         });
       });
@@ -4263,7 +4488,7 @@ window.EdiagMail = {
     ws['!cols'] = [
       {wch:14},{wch:20},{wch:20},{wch:6},{wch:14},
       {wch:6},{wch:10},{wch:8},{wch:14},{wch:24},
-      {wch:12},{wch:12},{wch:12},{wch:12},{wch:20}
+      {wch:40},{wch:40},{wch:20}
     ];
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '진단일정');
