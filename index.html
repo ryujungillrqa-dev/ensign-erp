@@ -164,7 +164,7 @@ table.dz td.num-ro{padding:6px 9px;text-align:right;font-variant-numeric:tabular
     <div id="pin-error" style="display:none;background:#fde8e8;color:#c0392b;padding:8px 12px;border-radius:7px;font-size:12px;margin-bottom:12px;text-align:center"></div>
     <div style="display:flex;gap:12px;justify-content:center;margin-bottom:24px"><div id="pin-dots" style="display:flex;gap:12px"></div></div>
     <div id="login-keypad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px"></div>
-    <button onclick="PinAuth.confirmSwitchUser()" style="width:100%;background:#f0f5f3;border:1px solid #d1dbd9;border-radius:8px;padding:8px;font-size:12px;color:#7d918c;cursor:pointer;margin-bottom:8px">다른 계정으로 로그인</button>
+    
     <div style="text-align:right;margin-top:4px"><button onclick="PinAuth.showEmailLogin()" style="background:none;border:none;font-size:11px;color:#b0bbb8;cursor:pointer;text-decoration:underline">관리자 로그인</button></div>
   </div>
   <div id="email-login" style="display:none;background:#fff;border-radius:16px;padding:36px 40px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
@@ -2746,10 +2746,6 @@ const PinAuth={
     this._renderKeypad('login-keypad','login');
     this._dots('pin-dots',0);
     document.getElementById('pin-error').style.display='none';
-    // "다른 계정으로 로그인" 버튼을 원래 상태로 복원 (취소 상태에서 돌아온 경우 대비)
-    var self = this;
-    var btn = document.querySelector('#pin-login button[onclick*="confirmSwitchUser"], #pin-login button[onclick*="showPinLogin"]');
-    if(btn){ btn.textContent = '다른 계정으로 로그인'; btn.onclick = function(){ self.confirmSwitchUser(); }; }
   },
   showEmailLogin(){
     document.getElementById('pin-setup').style.display='none';
@@ -2826,69 +2822,14 @@ const PinAuth={
 
     var localUser={userId:hr.id,name:hr.name,role:role,email:email,rank:hr.rank,dept:hr.dept};
     var pinHash=this._hash(this._setupPin,hr.id);
-    // 즉시 로그인 가능하게 하지 않고, 관리자 승인 대기 상태로 등록
-    var deviceLabel = (navigator.platform||'') + ' / ' + (navigator.userAgent||'').slice(0,60);
-    try{
-      await supa.from('pending_devices').insert({
-        hr_id: hr.id, name: hr.name, pin_hash: pinHash,
-        device_info: deviceLabel, status: '대기', requested_at: new Date().toISOString()
-      });
-    }catch(e){ console.error('승인 요청 등록 오류:', e); }
-    localStorage.setItem('ensign_pending_user', JSON.stringify(Object.assign({},localUser,{pinHash:pinHash})));
-    this._localUser = null;
-    this._showPendingScreen(name);
+    // 이 기기에 영구 등록 (한 기기 = 한 사람, "다른 계정으로 로그인" 기능 제거로 승인 절차 불필요)
+    localStorage.setItem('ensign_local_user', JSON.stringify(Object.assign({},localUser,{pinHash:pinHash, registeredAt:new Date().toISOString()})));
+    localStorage.setItem('ensign_pin_fail','0');
+    this._localUser = localUser;
+    SupaAuth.onLoginWithProfile(localUser);
   },
 
-  // 관리자 승인 대기 안내 화면
-  _showPendingScreen(name){
-    document.getElementById('pin-setup').style.display='none';
-    document.getElementById('pin-login').style.display='none';
-    document.getElementById('email-login').style.display='none';
-    var box = document.getElementById('pending-screen');
-    if(!box){
-      box = document.createElement('div');
-      box.id = 'pending-screen';
-      box.style.cssText = 'background:#fff;border-radius:16px;padding:40px 36px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,.25);text-align:center';
-      document.getElementById('login-screen').appendChild(box);
-    }
-    box.style.display = 'block';
-    box.innerHTML = '<div style="font-size:40px;margin-bottom:12px">🔒</div>'
-      + '<div style="font-size:16px;font-weight:800;color:var(--ink);margin-bottom:8px">관리자 승인 대기중</div>'
-      + '<div style="font-size:13px;color:var(--ink2);line-height:1.6;margin-bottom:20px">'+esc(name)+'님의 PIN 설정이 등록되었습니다.<br>관리자 또는 부관리자의 승인 후<br>로그인하실 수 있습니다.</div>'
-      + '<button onclick="PinAuth._checkApproval()" style="width:100%;background:#0e5e54;color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">승인 확인하기</button>'
-      + '<button onclick="PinAuth._cancelPending()" style="width:100%;background:#f0f5f3;border:1px solid #d1dbd9;border-radius:8px;padding:9px;font-size:12px;color:#7d918c;cursor:pointer">취소하고 처음으로</button>';
-  },
-
-  async _checkApproval(){
-    var pending = JSON.parse(localStorage.getItem('ensign_pending_user')||'null');
-    if(!pending){ this._cancelPending(); return; }
-    var res = await supa.from('pending_devices').select('status').eq('hr_id', pending.userId).eq('pin_hash', pending.pinHash).order('requested_at',{ascending:false}).limit(1);
-    var status = (res.data && res.data[0]) ? res.data[0].status : '대기';
-    if(status === '승인'){
-      localStorage.setItem('ensign_local_user', JSON.stringify(pending));
-      localStorage.removeItem('ensign_pending_user');
-      localStorage.setItem('ensign_pin_fail','0');
-      this._localUser = pending;
-      var box = document.getElementById('pending-screen');
-      if(box) box.style.display='none';
-      toast('✅ 승인되었습니다. 로그인해주세요.');
-      this.showPinLogin();
-    } else if(status === '거절'){
-      localStorage.removeItem('ensign_pending_user');
-      toast('❌ 승인이 거절되었습니다. 관리자에게 문의하세요.');
-      this._cancelPending();
-    } else {
-      toast('아직 승인 대기중입니다.');
-    }
-  },
-
-  _cancelPending(){
-    localStorage.removeItem('ensign_pending_user');
-    var box = document.getElementById('pending-screen');
-    if(box) box.style.display='none';
-    this.showSetup();
-  },
-  async _verifyPin(){
+    async _verifyPin(){
     var errEl=document.getElementById('pin-error');errEl.style.display='none';
     var stored=JSON.parse(localStorage.getItem('ensign_local_user')||'null');
     var failCount=parseInt(localStorage.getItem('ensign_pin_fail')||'0');
@@ -2900,9 +2841,22 @@ const PinAuth={
     var pinHash=this._hash(this._loginPin,stored?.userId||'');
     if(stored&&pinHash===stored.pinHash){
       localStorage.setItem('ensign_pin_fail','0');
-      // staff_profiles에서 최신 역할 다시 조회
-      var profRes=await supa.from('staff_profiles').select('role,email').eq('name',stored.name);
-      if(profRes.data&&profRes.data.length>0){stored.role=profRes.data[0].role||stored.role;}
+      // staff_profiles에서 최신 역할 + PIN 초기화 여부 조회
+      var profRes=await supa.from('staff_profiles').select('role,email,pin_reset_at').eq('name',stored.name);
+      if(profRes.data&&profRes.data.length>0){
+        stored.role=profRes.data[0].role||stored.role;
+        var resetAt = profRes.data[0].pin_reset_at;
+        if(resetAt && stored.registeredAt && new Date(resetAt) > new Date(stored.registeredAt)){
+          // 관리자가 PIN을 초기화함 → 이 기기의 등록 정보를 지우고 재등록 화면으로
+          localStorage.removeItem('ensign_local_user');
+          localStorage.removeItem('ensign_pin_session');
+          this._localUser = null;
+          errEl.textContent = '관리자가 PIN을 초기화했습니다. 다시 등록해주세요.';
+          errEl.style.display = 'block';
+          setTimeout(function(){ PinAuth.showSetup(); }, 1500);
+          return;
+        }
+      }
       this._localUser=stored;
       // 새로고침 시 PIN 재입력 없이 유지되도록 세션 토큰 저장 (2시간)
       localStorage.setItem('ensign_pin_session', JSON.stringify({user:stored, expires:Date.now()+2*60*60*1000}));
@@ -2948,53 +2902,9 @@ const PinAuth={
   },
   cancelSetup(){this.showPinLogin();},
 
-  // "다른 계정으로 로그인" 클릭 시: 곧바로 초기화하지 않고, 먼저 현재 등록된 사용자의 PIN을 확인받음
-  confirmSwitchUser(){
-    var stored = JSON.parse(localStorage.getItem('ensign_local_user')||'null');
-    if(!stored){ this.switchUser(); return; } // 등록된 사용자가 없으면 바로 설정화면으로
-    this._loginPin = '';
-    document.getElementById('pin-greeting').textContent = stored.name + '님의 현재 PIN을 입력하세요';
-    document.getElementById('pin-error').style.display = 'none';
-    this._renderKeypad('login-keypad', 'switching');
-    this._dots('pin-dots', 0);
-    // "다른 계정으로 로그인" 버튼을 "취소"로 임시 변경
-    var self = this;
-    var btn = document.querySelector('#pin-login button[onclick*="confirmSwitchUser"]');
-    if(btn){ btn.textContent = '취소'; btn.onclick = function(){ self.showPinLogin(); }; }
-  },
-
-  // 본인 확인용 PIN 검증 (계정 전환 전 단계, 일반 로그인과 동일한 5회 잠금 정책 적용)
-  _verifySwitchPin(){
-    var errEl = document.getElementById('pin-error');
-    errEl.style.display = 'none';
-    var stored = JSON.parse(localStorage.getItem('ensign_local_user')||'null');
-    var failCount = parseInt(localStorage.getItem('ensign_pin_fail')||'0');
-    if(failCount>=5){
-      var lockTime = parseInt(localStorage.getItem('ensign_pin_lock')||'0');
-      if(Date.now()-lockTime < 5*60*1000){
-        var remain = Math.ceil((5*60*1000-(Date.now()-lockTime))/60000);
-        errEl.textContent = 'PIN 5회 오류. '+remain+'분 후 다시 시도하세요.';
-        errEl.style.display = 'block';
-        this._loginPin=''; this._dots('pin-dots',0);
-        return;
-      } else { localStorage.setItem('ensign_pin_fail','0'); }
-    }
-    var pinHash = this._hash(this._loginPin, stored?.userId||'');
-    if(stored && pinHash === stored.pinHash){
-      localStorage.setItem('ensign_pin_fail','0');
-      // 본인 확인 성공 → 비로소 계정 전환(초기화) 허용
-      this.switchUser();
-    } else {
-      var newFail = failCount+1;
-      localStorage.setItem('ensign_pin_fail', String(newFail));
-      if(newFail>=5) localStorage.setItem('ensign_pin_lock', String(Date.now()));
-      errEl.textContent = '현재 PIN이 올바르지 않습니다. ('+newFail+'/5회)';
-      errEl.style.display = 'block';
-      this._loginPin = '';
-      this._dots('pin-dots', 0);
-    }
-  },
-
+  // 관리자가 직원 PIN을 원격 초기화했을 때, 그 직원의 화면에서 호출되어 등록 화면으로 돌아감
+  // (보안: "다른 계정으로 로그인" 기능은 타인 행세 위험으로 제거되었습니다.
+  //  PIN 분실 시 관리자에게 요청 → 관리자가 권한관리에서 초기화 → 본인이 다시 이름+PIN 등록)
   switchUser(){localStorage.removeItem('ensign_local_user');localStorage.setItem('ensign_pin_fail','0');this._localUser=null;this.showSetup();},
   _hash:function(pin,salt){var h=0;var s=pin+salt+'ensign2024';for(var i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h=h&h;}return Math.abs(h).toString(36)+s.length.toString(36);}
 };
@@ -3407,13 +3317,11 @@ Views.auth = function(){
     <div class="toolbar sticky-toolbar">
       <button class="btn ${authTab==='role'?'pri':''}" onclick="authTab='role';Views.auth()">역할별 권한 설정</button>
       <button class="btn ${authTab==='user'?'pri':''}" onclick="authTab='user';Views.auth()">직원별 역할 배정</button>
-      <button class="btn ${authTab==='pending'?'pri':''}" onclick="authTab='pending';Views.auth()">🔒 기기 승인 대기</button>
       <span class="sp"></span>
     </div>
     <div id="auth-content" style="margin-top:4px"></div>`;
   if(authTab==='role') _renderAuthRole();
-  else if(authTab==='user') _renderAuthUser();
-  else _renderPendingDevices();
+  else _renderAuthUser();
 };
 
 /* ── 기기 승인 대기 목록 ── */
@@ -3530,8 +3438,9 @@ function _renderAuthUser(){
         </select>
       </td>
       <td class="ctr">${cur?`<span class="tag ${cur==='관리자'?'t1':cur==='열람전용'?'gray':'t4'}">${esc(cur)}</span>`:'<span style="color:var(--ink3);font-size:12px">미배정</span>'}</td>
+      <td class="ctr"><button class="btn sm dgr" onclick="Auth.resetPin('${e.id}','${esc(e.name)}')">PIN 초기화</button></td>
     </tr>`;
-  }).join('') || `<tr><td colspan="5"><div class="empty"><b>재직 중인 직원이 없습니다</b>인사관리에서 직원을 먼저 등록하세요</div></td></tr>`;
+  }).join('') || `<tr><td colspan="6"><div class="empty"><b>재직 중인 직원이 없습니다</b>인사관리에서 직원을 먼저 등록하세요</div></td></tr>`;
 
   // 역할별 인원 요약
   const summary = roles.map(r=>{
@@ -3549,32 +3458,23 @@ function _renderAuthUser(){
     </div>
     <div class="bd np tbl-wrap">
       <table class="grid">
-        <thead><tr><th>이름</th><th>부서</th><th>직급</th><th class="ctr" style="width:160px">역할 선택</th><th class="ctr" style="width:100px">현재 역할</th></tr></thead>
+        <thead><tr><th>이름</th><th>부서</th><th>직급</th><th class="ctr" style="width:160px">역할 선택</th><th class="ctr" style="width:100px">현재 역할</th><th class="ctr" style="width:100px">PIN 관리</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div></div>`;
 }
 
 const Auth = {
-  // 기기 승인 (관리자/부관리자 전용)
-  async approveDevice(id){
-    if(!confirm('이 기기의 PIN 등록을 승인하시겠습니까?')) return;
-    const {error} = await supa.from('pending_devices').update({status:'승인', approved_at:new Date().toISOString()}).eq('id', id);
-    if(error){ toast('승인 실패: '+error.message); return; }
-    toast('✅ 승인되었습니다');
-    _renderPendingDevices();
-  },
-  async rejectDevice(id){
-    if(!confirm('이 요청을 거절하시겠습니까?')) return;
-    const {error} = await supa.from('pending_devices').update({status:'거절'}).eq('id', id);
-    if(error){ toast('거절 처리 실패: '+error.message); return; }
-    toast('요청이 거절되었습니다');
-    _renderPendingDevices();
-  },
-  async deletePending(id){
-    if(!confirm('이 기록을 목록에서 삭제할까요?')) return;
-    await supa.from('pending_devices').delete().eq('id', id);
-    _renderPendingDevices();
+  // 직원 PIN 초기화: 해당 직원이 이 기기/타 기기에 등록한 PIN 정보를 지우고,
+  // 직원 본인이 다시 "이름+PIN"으로 등록할 수 있는 상태로 되돌림.
+  // (PIN은 각 기기 localStorage에 저장되므로, 관리자가 원격으로 직접 지울 수는 없음.
+  //  대신 staff_profiles에 초기화 플래그를 남겨, 해당 직원이 로그인 시도 시
+  //  자동으로 등록화면으로 안내되도록 처리)
+  async resetPin(empId, empName){
+    if(!confirm('['+empName+']님의 PIN을 초기화하시겠습니까?\n초기화 후 본인이 다시 이름+PIN으로 등록해야 합니다.')) return;
+    const {error} = await supa.from('staff_profiles').update({pin_reset_at:new Date().toISOString()}).eq('name', empName);
+    if(error){ toast('초기화 실패: '+error.message); return; }
+    toast('✅ '+empName+'님의 PIN이 초기화되었습니다. 본인 기기에서 다시 등록해주세요.');
   },
   setPerm(role, menu, val){
     if(!State.auth.roles[role]) return;
