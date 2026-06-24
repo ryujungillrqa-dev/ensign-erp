@@ -4567,6 +4567,12 @@ function _renderEquip(){
       holderTag += `<br><span class="tag t4" style="margin-top:3px">⏳ ${esc(eq.pendingHolderName)} 인수확인 대기</span>`;
     }
     const histCount = (eq.handoverHistory||[]).length;
+    const myName = _supaProfile?.name;
+    const isMyPending = eq.pendingHandoverId && eq.pendingHolderName === myName;
+    const pendingRec = isMyPending ? (eq.handoverHistory||[]).find(r=>r.id===eq.pendingHandoverId) : null;
+    const confirmBtn = isMyPending
+      ? `<button class="btn sm pri" style="background:#e65100;border-color:#e65100" onclick="Equip.confirmReceive('${eq.id}','${pendingRec?pendingRec.id:''}')">✅ 인수확인</button>`
+      : '';
     return `<tr>
       <td><b>${esc(eq.equipName||'')}</b></td>
       <td>${esc(eq.equipNo||'-')}</td>
@@ -4576,6 +4582,7 @@ function _renderEquip(){
       <td class="ctr">${esc(eq.purchaseYear||'-')}</td>
       <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(eq.failureHistory||'')}">${esc(eq.failureHistory||'-')}</td>
       <td class="ctr">
+        ${confirmBtn}
         <button class="btn sm" style="background:#fff3e0;border-color:#ffcc80;color:#e65100" onclick="Equip.handover('${eq.id}')">🔄 인수인계</button>
         <button class="btn sm" onclick="Equip.history('${eq.id}')">이력${histCount?'('+histCount+')':''}</button>
         <button class="btn sm" onclick="Equip.edit('${eq.id}')">수정</button>
@@ -4611,7 +4618,14 @@ function _renderEquipByPerson(){
     if(!byPerson[eq.holderName]) byPerson[eq.holderName] = [];
     byPerson[eq.holderName].push(eq);
   });
-  const names = Object.keys(byPerson).sort();
+  // 인수확인 대기중인 장비도, 인수받을 사람의 카드에 함께 표시 (확인 버튼 포함)
+  const byPersonPending = {};
+  list.forEach(eq=>{
+    if(!eq.pendingHandoverId || !eq.pendingHolderName) return;
+    if(!byPersonPending[eq.pendingHolderName]) byPersonPending[eq.pendingHolderName] = [];
+    byPersonPending[eq.pendingHolderName].push(eq);
+  });
+  const names = [...new Set([...Object.keys(byPerson), ...Object.keys(byPersonPending)])].sort();
 
   if(!names.length){
     document.getElementById('equip-list').innerHTML =
@@ -4620,7 +4634,18 @@ function _renderEquipByPerson(){
   }
 
   const cards = names.map(name=>{
-    const items = byPerson[name].map(eq=>`
+    const pendingItems = (byPersonPending[name]||[]).map(eq=>{
+      const rec = (eq.handoverHistory||[]).find(r=>r.id===eq.pendingHandoverId);
+      return `
+      <tr style="background:#fff8e1">
+        <td><b>${esc(eq.equipName||'')}</b></td>
+        <td>${esc(eq.equipNo||'-')}</td>
+        <td>${esc(eq.sn||'-')}</td>
+        <td><span class="tag t4">⏳ 인수확인 대기</span></td>
+        <td class="ctr"><button class="btn sm pri" style="background:#e65100;border-color:#e65100" onclick="Equip.confirmReceive('${eq.id}','${rec?rec.id:''}')">✅ 인수확인</button></td>
+      </tr>`;
+    }).join('');
+    const items = (byPerson[name]||[]).map(eq=>`
       <tr>
         <td><b>${esc(eq.equipName||'')}</b></td>
         <td>${esc(eq.equipNo||'-')}</td>
@@ -4628,11 +4653,12 @@ function _renderEquipByPerson(){
         <td style="font-size:12px;color:var(--ink3)">${esc(eq.holderSince||'-')} 인수</td>
         <td class="ctr"><button class="btn sm" style="background:#fff3e0;border-color:#ffcc80;color:#e65100" onclick="Equip.handover('${eq.id}')">🔄 인수인계</button></td>
       </tr>`).join('');
+    const total = (byPerson[name]||[]).length + (byPersonPending[name]||[]).length;
     return `<div class="card">
-      <div class="hd"><h2>👤 ${esc(name)} <span style="font-size:12px;color:var(--ink3);font-weight:500">보유 장비 ${byPerson[name].length}건</span></h2></div>
+      <div class="hd"><h2>👤 ${esc(name)} <span style="font-size:12px;color:var(--ink3);font-weight:500">보유 장비 ${total}건</span></h2></div>
       <div class="bd np"><table class="grid">
-        <thead><tr><th>장비명</th><th style="width:110px">장비번호</th><th style="width:130px">SN</th><th style="width:120px">인수일</th><th class="ctr" style="width:120px">관리</th></tr></thead>
-        <tbody>${items}</tbody>
+        <thead><tr><th>장비명</th><th style="width:110px">장비번호</th><th style="width:130px">SN</th><th style="width:140px">상태</th><th class="ctr" style="width:120px">관리</th></tr></thead>
+        <tbody>${pendingItems}${items}</tbody>
       </table></div>
     </div>`;
   }).join('');
