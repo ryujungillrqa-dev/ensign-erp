@@ -437,8 +437,14 @@ function _copyEl(id){
   navigator.clipboard.writeText(txt).then(function(){ toast('복사되었습니다'); });
 }
 function route(){
-  const v = (location.hash.replace('#','') || 'contracts');
-  let view = Views[v] ? v : 'dash';
+  // 해시가 없으면(새로고침 시 해시가 사라진 경우 포함) 마지막으로 보던 화면을 복원
+  let v = location.hash.replace('#','');
+  if(!v){
+    v = localStorage.getItem('ensign_last_view') || 'contracts';
+    if(Views[v]) location.hash = '#'+v; // 주소창에도 반영 (다음 새로고침부터는 정상적으로 해시 유지)
+  }
+  let view = Views[v] ? v : 'contracts';
+  localStorage.setItem('ensign_last_view', view); // 현재 화면을 항상 기록해 다음 새로고침 시 복원
   // 접근 권한 체크: 'none'이면 해당 화면 진입 차단 (메뉴 비표시 + URL 직접 접근도 방지)
   if(typeof SupaAuth!=='undefined' && SupaAuth.getPermLevel){
     let level = SupaAuth.getPermLevel(view);
