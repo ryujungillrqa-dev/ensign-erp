@@ -164,7 +164,7 @@ table.dz td.num-ro{padding:6px 9px;text-align:right;font-variant-numeric:tabular
     <div id="pin-error" style="display:none;background:#fde8e8;color:#c0392b;padding:8px 12px;border-radius:7px;font-size:12px;margin-bottom:12px;text-align:center"></div>
     <div style="display:flex;gap:12px;justify-content:center;margin-bottom:24px"><div id="pin-dots" style="display:flex;gap:12px"></div></div>
     <div id="login-keypad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px"></div>
-    <button onclick="PinAuth.switchUser()" style="width:100%;background:#f0f5f3;border:1px solid #d1dbd9;border-radius:8px;padding:8px;font-size:12px;color:#7d918c;cursor:pointer;margin-bottom:8px">다른 계정으로 로그인</button>
+    
     <div style="text-align:right;margin-top:4px"><button onclick="PinAuth.showEmailLogin()" style="background:none;border:none;font-size:11px;color:#b0bbb8;cursor:pointer;text-decoration:underline">관리자 로그인</button></div>
   </div>
   <div id="email-login" style="display:none;background:#fff;border-radius:16px;padding:36px 40px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
@@ -188,6 +188,7 @@ table.dz td.num-ro{padding:6px 9px;text-align:right;font-variant-numeric:tabular
     <a href="#contracts" data-v="contracts"><span class="ic">📄</span>계약관리</a>
     <a href="#ediagmail" data-v="ediagmail"><span class="ic">📧</span>진단일정등록</a>
     <a href="#ediag" data-v="ediag"><span class="ic">⚡</span>에너지진단</a>
+    <a href="#equip" data-v="equip"><span class="ic">🔧</span>진단장비현황</a>
     <a href="#invoices" data-v="invoices"><span class="ic">🧾</span>세금계산서</a>
     <div class="grp">관리자</div>
     <a href="#dash" data-v="dash"><span class="ic">▦</span>대시보드</a>
@@ -233,12 +234,12 @@ const supa = window.supabase.createClient(SUPA_URL, SUPA_KEY);
 let _supaUser = null;
 let _supaProfile = null;
 const ROLE_MENUS = {
-  '관리자':    ['contracts','ediagmail','ediag','invoices','dash','hr','auth','bank','match','savings','settings'],
-  '부관리자':  ['contracts','ediagmail','ediag','invoices','dash','hr','auth','settings'],
-  '계약담당':  ['contracts','ediagmail','ediag','invoices','dash'],
-  '진단팀장':  ['contracts','ediagmail','ediag','invoices'],
+  '관리자':    ['contracts','ediagmail','ediag','equip','invoices','dash','hr','auth','bank','match','savings','settings'],
+  '부관리자':  ['contracts','ediagmail','ediag','equip','invoices','dash','hr','auth','settings'],
+  '계약담당':  ['contracts','ediagmail','ediag','equip','invoices','dash'],
+  '진단팀장':  ['contracts','ediagmail','ediag','equip','invoices'],
   '자금담당':  ['contracts','ediagmail','ediag','invoices','hr'],
-  '일반직원':  ['contracts','ediagmail','ediag','invoices'],
+  '일반직원':  ['contracts','ediagmail','ediag','equip','invoices'],
 };
 
 'use strict';
@@ -261,14 +262,15 @@ const State = {
   hr:        DB.read('hr', []),
   auth:      DB.read('auth', { roles:{}, users:{} }),
   ediag:     DB.read('ediag', []),   // [{id,contractId,leader,members,startDate,endDate,memo,files:{report:{name,size,data},review:{name,size,data}}}]       // {id, name, dept, position, rank, joinDate, status(재직/휴직/퇴직), birth, email, phone, memo}    // {id, name, bankName, monthly, start, maturity, payments:[{date,amount}], memo}
+  equip:     DB.read('equip', []),   // [{id, equipName, equipNo, sn, calibrationHistory, purchaseYear, failureHistory, memo}]
   settings:  DB.read('settings', { company:'㈜엔자인', ceo:'', bizNo:'' }),
-  saveAll(){ DB.write('contracts',this.contracts); DB.write('invoices',this.invoices); DB.write('bank',this.bank); DB.write('savings',this.savings); DB.write('settings',this.settings); DB.write('hr',this.hr); DB.write('auth',this.auth); DB.write('ediag',this.ediag); }
+  saveAll(){ DB.write('contracts',this.contracts); DB.write('invoices',this.invoices); DB.write('bank',this.bank); DB.write('savings',this.savings); DB.write('settings',this.settings); DB.write('hr',this.hr); DB.write('auth',this.auth); DB.write('ediag',this.ediag); DB.write('equip',this.equip); }
 };
 
 /* ===== 도메인 상수 ===== */
 const TYPE_CODES = { '01':'탄소전략수립', '02':'신사업기획팀', '03':'기계설비성능', '04':'에너지진단팀', '05':'기타' };
 const TYPE_TAG   = { '01':'t1', '02':'t2', '03':'t3', '04':'t4', '05':'t5' };
-const INV_KINDS  = ['전체발행','선급금','중도금','잔금'];
+const INV_KINDS  = ['전체발행','선급금','중도금','중도금1','중도금2','잔금'];
 
 /* TOE → 에너지진단 등급 자동산정 (연간 에너지사용량 기준) */
 function toeGrade(toe){
@@ -351,6 +353,7 @@ const VIEW_META = {
   settings:{title:'설정 / 백업', crumb:'회사정보 · 데이터 관리'},
   hr:{title:'인사관리', crumb:'임직원 정보 · 직급 · 재직현황'},
   auth:{title:'권한관리', crumb:'메뉴별 접근 권한 · 직급별 설정'},
+  equip:{title:'진단장비현황', crumb:'에너지진단 장비 · 검교정 · 고장이력 관리'},
   ediag:{title:'에너지진단', crumb:'에너지진단팀 계약 · 진단팀 구성 관리'},
   ediagmail:{title:'진단일정등록', crumb:'에너지진단 일정 등록 · 팀장 메일 발송'}
 };
@@ -435,12 +438,29 @@ function _copyEl(id){
 }
 function route(){
   const v = (location.hash.replace('#','') || 'contracts');
-  const view = Views[v] ? v : 'dash';
+  let view = Views[v] ? v : 'dash';
+  // 접근 권한 체크: 'none'이면 해당 화면 진입 차단 (메뉴 비표시 + URL 직접 접근도 방지)
+  if(typeof SupaAuth!=='undefined' && SupaAuth.getPermLevel){
+    let level = SupaAuth.getPermLevel(view);
+    if(level==='none'){
+      toast('접근 권한이 없습니다');
+      // 접근 가능한 첫 메뉴를 찾아 이동 (무한루프 방지: 변경이 있을 때만 hash 갱신)
+      const fallback = AUTH_MENUS.map(m=>m.key).find(k=>SupaAuth.getPermLevel(k)!=='none');
+      if(fallback && fallback!==view){
+        location.hash = '#'+fallback;
+        return; // hashchange가 route()를 다시 호출하므로 여기서 종료
+      }
+      // 접근 가능한 메뉴가 전혀 없으면 빈 안내만 표시하고 종료
+      document.getElementById('content').innerHTML = '<div class="card"><div class="empty"><b>접근 가능한 메뉴가 없습니다</b>관리자에게 문의해주세요</div></div>';
+      return;
+    }
+  }
   document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on', a.dataset.v===view));
   const meta = VIEW_META[view];
   document.getElementById('page-title').textContent = meta.title;
   document.getElementById('page-crumb').textContent = meta.crumb;
   Views[view]();
+  if(typeof SupaAuth!=='undefined' && SupaAuth.applyReadOnly) SupaAuth.applyReadOnly(view);
 }
 window.addEventListener('hashchange', route);
 
@@ -454,12 +474,15 @@ Views.dash = function(){
   if(dashYear && dashYear !== '' && !allYears.includes(dashYear)) dashYear = allYears[0] || '';
   // 계약금액 합계: 계약의 대상년도(dashYear) 기준
   const cts = dashYear ? State.contracts.filter(c=>c.year===dashYear) : State.contracts;
-  const totalAmt = cts.reduce((s,c)=>s+(Number(c.supply)||0)+(Number(c.vat)||0),0);
+  const totalAmt = cts.reduce((s,c)=>s+(Number(c.supply)||0),0); // 계약금액 = 공급가액(VAT 제외)
+  const totalAmtVat = cts.reduce((s,c)=>s+(Number(c.supply)||0)+(Number(c.vat)||0),0); // 계약금액(부가세포함)
   // 세금계산서 발행/미수/입금 합계: 발행일자(issueDate)의 연도 기준 (계약 대상년도와 무관)
   const issued   = State.invoices.filter(v=>v.issueDate && (!dashYear || v.issueDate.slice(0,4)===dashYear));
-  const issuedAmt= issued.reduce((s,v)=>s+invoiceTotal(v),0);
+  const issuedAmt= issued.reduce((s,v)=>s+(Number(v.supply)||0),0); // 공급가액(VAT 제외)
+  const issuedAmtVat = issued.reduce((s,v)=>s+(Number(v.supply)||0)+(Number(v.vat)||0),0); // 발행금액(부가세포함)
   const unpaid   = issued.filter(v=>!v.paid);
-  const unpaidAmt= unpaid.reduce((s,v)=>s+invoiceTotal(v),0);
+  const unpaidAmt= unpaid.reduce((s,v)=>s+(Number(v.supply)||0),0); // 공급가액(VAT 제외)
+  const unpaidAmtVat = unpaid.reduce((s,v)=>s+(Number(v.supply)||0)+(Number(v.vat)||0),0); // 미수금(부가세포함)
   const paidAmt  = issuedAmt - unpaidAmt;
   const bankBalMap = calcBankBalances();
   const bankBal    = Object.values(bankBalMap).reduce((s,v)=>s+v.balance,0);
@@ -480,14 +503,17 @@ Views.dash = function(){
 
   /* 구분별 */
   const byType = {};
-  Object.keys(TYPE_CODES).forEach(k=>byType[k]={cnt:0,amt:0,issuedAmt:0});
-  cts.forEach(c=>{ if(byType[c.typeCode]){ byType[c.typeCode].cnt++; byType[c.typeCode].amt+=(Number(c.supply)||0)+(Number(c.vat)||0); } });
-  // 사업본부별 계산서 발행금액: '발행일 기준 연도(issued)'에 속한 세금계산서를 계약의 사업본부로 집계
+  Object.keys(TYPE_CODES).forEach(k=>byType[k]={cnt:0,amt:0,issuedAmt:0,unpaidAmt:0});
+  cts.forEach(c=>{ if(byType[c.typeCode]){ byType[c.typeCode].cnt++; byType[c.typeCode].amt+=(Number(c.supply)||0); } }); // 공급가액(VAT 제외)
+  // 사업본부별 계산서 발행금액·미수금: '발행일 기준 연도(issued)'에 속한 세금계산서를 계약의 사업본부로 집계
   const ctIdToType = {};
   State.contracts.forEach(c=>{ ctIdToType[c.id]=c.typeCode; });
   issued.forEach(v=>{
     const tc = ctIdToType[v.contractId];
-    if(tc && byType[tc]) byType[tc].issuedAmt += invoiceTotal(v);
+    if(tc && byType[tc]){
+      byType[tc].issuedAmt += (Number(v.supply)||0); // 공급가액(VAT 제외)
+      if(!v.paid) byType[tc].unpaidAmt += (Number(v.supply)||0); // 미수금(부가세제외)
+    }
   });
   const typeRows = Object.keys(TYPE_CODES).filter(k=>byType[k].cnt>0||true).map(k=>`
     <tr>
@@ -495,28 +521,77 @@ Views.dash = function(){
       <td class="ctr">${byType[k].cnt}건</td>
       <td class="num">${fmt.money(byType[k].amt)}</td>
       <td class="num">${fmt.money(byType[k].issuedAmt)}</td>
+      <td class="num" style="color:${byType[k].unpaidAmt>0?'var(--red)':'inherit'}">${fmt.money(byType[k].unpaidAmt)}</td>
     </tr>`).join('');
+
+  /* 사업본부별 계약금액 / 발행금액 원형그래프(도넛) */
+  const TYPE_COLORS = { '01':'#4caf7d', '02':'#42a5f5', '03':'#ffa726', '04':'#ab47bc', '05':'#90a4ae' };
+  function donutChart(title, dataMap, valueKey){
+    const keys = Object.keys(TYPE_CODES).filter(k=>dataMap[k][valueKey]>0);
+    const total = keys.reduce((s,k)=>s+dataMap[k][valueKey],0);
+    const W=220, H=220, cx=W/2, cy=H/2, r=98, rInner=56;
+    if(total<=0){
+      return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--ink3);font-size:12px">
+        <div style="font-weight:700;margin-bottom:6px">${title}</div>데이터 없음</div>`;
+    }
+    let angle = -90; // 12시 방향부터 시작
+    let paths = '';
+    let legend = '';
+    keys.forEach(k=>{
+      const val = dataMap[k][valueKey];
+      const pct = val/total*100;
+      const sweep = pct/100*360;
+      const a1 = angle*Math.PI/180;
+      const a2 = (angle+sweep)*Math.PI/180;
+      const x1o=cx+r*Math.cos(a1), y1o=cy+r*Math.sin(a1);
+      const x2o=cx+r*Math.cos(a2), y2o=cy+r*Math.sin(a2);
+      const x1i=cx+rInner*Math.cos(a1), y1i=cy+rInner*Math.sin(a1);
+      const x2i=cx+rInner*Math.cos(a2), y2i=cy+rInner*Math.sin(a2);
+      const large = sweep>180?1:0;
+      paths += `<path d="M${x1o},${y1o} A${r},${r} 0 ${large} 1 ${x2o},${y2o} L${x2i},${y2i} A${rInner},${rInner} 0 ${large} 0 ${x1i},${y1i} Z" fill="${TYPE_COLORS[k]}" stroke="#fff" stroke-width="1.5"/>`;
+      // 비율(%)을 도넛 조각 중간 지점에 직접 표시 (조각이 너무 작으면(5% 미만) 생략해 겹침 방지)
+      if(pct>=5){
+        const midAngle = (angle+sweep/2)*Math.PI/180;
+        const rLabel = (r+rInner)/2;
+        const lx = cx+rLabel*Math.cos(midAngle), ly = cy+rLabel*Math.sin(midAngle);
+        paths += `<text x="${lx}" y="${ly+3.5}" text-anchor="middle" font-size="11" font-weight="800" fill="#fff" style="paint-order:stroke;stroke:rgba(0,0,0,0.25);stroke-width:2px">${pct.toFixed(0)}%</text>`;
+      }
+      legend += `<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink2);margin-bottom:6px">
+        <span style="width:10px;height:10px;background:${TYPE_COLORS[k]};border-radius:2px;display:inline-block;flex:none"></span>
+        <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${TYPE_CODES[k]}</span>
+      </div>`;
+      angle += sweep;
+    });
+    return `<div style="display:flex;flex-direction:column;height:100%">
+      <div style="font-size:12px;font-weight:700;color:var(--ink);margin-bottom:4px;text-align:center">${title}</div>
+      <div style="display:flex;align-items:center;flex:1;gap:10px">
+        <svg viewBox="0 0 ${W} ${H}" style="width:170px;height:170px;flex:none">
+          ${paths}
+          <text x="${cx}" y="${cy-3}" text-anchor="middle" font-size="13" font-weight="800" fill="var(--ink)">${fmt.money(total)}</text>
+          <text x="${cx}" y="${cy+14}" text-anchor="middle" font-size="10" fill="var(--ink3)">원</text>
+        </svg>
+        <div style="flex:1;min-width:0">${legend}</div>
+      </div>
+    </div>`;
+  }
+  const ctDonut  = donutChart('계약금액 비율', byType, 'amt');
+  const invDonut = donutChart('발행금액 비율', byType, 'issuedAmt');
 
   /* 년도별 비교: 3개년 그래프로 대체됨 */
 
-  /* 최근 계약 */
-  const recent = cts.slice().sort((a,b)=>(b.contractDate||'').localeCompare(a.contractDate||'')).slice(0,6);
-  const recentRows = recent.map(c=>`
-    <tr>
-      <td>${esc(c.no)}</td><td>${esc(c.name)}</td><td>${esc(c.client)}</td>
-      <td class="num">${fmt.money((Number(c.supply)||0)+(Number(c.vat)||0))}</td>
-    </tr>`).join('') || '<tr><td colspan="4"><div class="empty">등록된 계약이 없습니다</div></td></tr>';
+  /* 최근 계약 카드는 삭제됨 */
 
   /* 과거 3개년 데이터 (현재 선택 년도 기준으로 최근 3년) */
   const baseYear = dashYear ? parseInt(dashYear) : new Date().getFullYear();
   const chart3Years = [baseYear-2, baseYear-1, baseYear].map(String);
   const yearStats = chart3Years.map(y=>{
+    // 계약금액: 계약의 대상년도(y) 기준, 공급가액(VAT 제외)
     const ycts  = State.contracts.filter(c=>c.year===y);
-    const yIds  = new Set(ycts.map(c=>c.id));
-    const ctAmt = ycts.reduce((s,c)=>s+(Number(c.supply)||0)+(Number(c.vat)||0),0);
-    const invs  = State.invoices.filter(v=>v.issueDate && yIds.has(v.contractId));
-    const invAmt= invs.reduce((s,v)=>s+invoiceTotal(v),0);
-    const paid  = invs.filter(v=>v.paid).reduce((s,v)=>s+invoiceTotal(v),0);
+    const ctAmt = ycts.reduce((s,c)=>s+(Number(c.supply)||0),0);
+    // 발행금액: 세금계산서 '발행일자'의 연도(y) 기준 (계약 대상년도와 무관)
+    const invs  = State.invoices.filter(v=>v.issueDate && v.issueDate.slice(0,4)===y);
+    const invAmt= invs.reduce((s,v)=>s+(Number(v.supply)||0),0); // 공급가액(VAT 제외) — 월별 비교와 합계 일치
+    const paid  = invs.filter(v=>v.paid).reduce((s,v)=>s+(Number(v.supply)||0),0); // 공급가액(VAT 제외)
     const unpaid= invAmt - paid;
     return { y, ctAmt, invAmt, paid, unpaid, cnt:ycts.length };
   });
@@ -534,10 +609,23 @@ Views.dash = function(){
     });
     return arr;
   }
-  const ctMonthCur   = monthlyAmtByDate('contractDate', State.contracts, c=>(Number(c.supply)||0)+(Number(c.vat)||0), curYear);
-  const ctMonthPrev  = monthlyAmtByDate('contractDate', State.contracts, c=>(Number(c.supply)||0)+(Number(c.vat)||0), prevYear);
-  const invMonthCur  = monthlyAmtByDate('issueDate', State.invoices, v=>invoiceTotal(v), curYear);
-  const invMonthPrev = monthlyAmtByDate('issueDate', State.invoices, v=>invoiceTotal(v), prevYear);
+  // 계약금액: '최근 3개년 비교'와 동일하게 계약 대상년도(c.year) 기준으로 연도 매칭.
+  // 월 배치는 계약체결일(contractDate)이 있으면 그 월, 없으면 1월에 합산 (연도 합계는 항상 3개년 비교와 일치)
+  function monthlyCtByYear(year){
+    const arr = Array(12).fill(0);
+    State.contracts.filter(c=>c.year===year).forEach(c=>{
+      const amt = Number(c.supply)||0;
+      const d = c.contractDate;
+      let m = 0;
+      if(d && d.slice(0,4)===year){ const mm = parseInt(d.slice(5,7),10)-1; if(mm>=0&&mm<12) m=mm; }
+      arr[m]+=amt;
+    });
+    return arr;
+  }
+  const ctMonthCur   = monthlyCtByYear(curYear);  // 공급가액(VAT 제외), 3개년 비교와 합계 일치
+  const ctMonthPrev  = monthlyCtByYear(prevYear); // 공급가액(VAT 제외), 3개년 비교와 합계 일치
+  const invMonthCur  = monthlyAmtByDate('issueDate', State.invoices, v=>(Number(v.supply)||0), curYear); // 공급가액(VAT 제외)
+  const invMonthPrev = monthlyAmtByDate('issueDate', State.invoices, v=>(Number(v.supply)||0), prevYear); // 공급가액(VAT 제외)
 
   /* 월별 비교 그래프 (계약금액 / 발행금액, 올해 vs 전년도) */
   function monthLineChart(curArr, prevArr, title, curColor, prevColor){
@@ -565,7 +653,7 @@ Views.dash = function(){
       const color = ai===0?curColor:prevColor;
       arr.forEach((v,i)=>{ const [x,y]=pt(arr,i); dots+=`<circle cx="${x}" cy="${y}" r="2.5" fill="${color}"/>`; });
     });
-    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:100%;min-height:170px">
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%;min-height:170px">
       <text x="${W/2}" y="13" text-anchor="middle" font-size="11" fill="#1c2733" font-weight="700">${title}</text>
       ${ylabels}
       <path d="${pathOf(prevArr)}" fill="none" stroke="${prevColor}" stroke-width="2" stroke-dasharray="4,3"/>
@@ -598,6 +686,16 @@ Views.dash = function(){
     }).join('');
     return `<tr><td class="lbl" style="white-space:nowrap;font-weight:600">${label}</td>${cells}</tr>`;
   }
+  // 가로형 월별표 맨 아래 합계 행 (1~12월 총합 + 전년대비 증감율, 합계 칼럼 수만큼 colspan)
+  function monthTotalRow(label, curArr, prevArr){
+    const curSum  = curArr.reduce((a,b)=>a+b,0);
+    const prevSum = prevArr.reduce((a,b)=>a+b,0);
+    const chg = prevSum ? chgBadge(curSum, prevSum) : '';
+    return `<tr style="border-top:2px solid var(--line)">
+      <td class="lbl" style="font-weight:800;color:var(--ink2)">${label} 합계</td>
+      <td class="num" colspan="12" style="font-weight:800;font-size:12px">${fmt.money(curSum)} <span style="font-size:10.5px;color:var(--ink3);font-weight:500">(전년 ${fmt.money(prevSum)})</span> ${chg}</td>
+    </tr>`;
+  }
 
   /* 월별 '누적' 배열 생성 (1월부터 해당월까지 합산) */
   function toCumulative(arr){
@@ -611,28 +709,94 @@ Views.dash = function(){
   const invCumPrev  = toCumulative(invMonthPrev);
 
   /* 세로형(월이 행) 비교표: 금액은 '해당월 실적', 증감율은 '1월~해당월 누적' 기준 */
-  const CT_BG  = '#eef5f0';  // 계약금액 영역 파스텔(연그린)
-  const INV_BG = '#eef2fa';  // 발행금액 영역 파스텔(연블루)
+  const CT_BG  = '#f6faf7';  // 계약금액 영역 파스텔(더 흐린 연그린)
+  const INV_BG = '#f6f8fc';  // 발행금액 영역 파스텔(더 흐린 연블루)
   const cumTableRows = [...Array(12)].map((_,i)=>{
     const m = i+1;
     const ctMc=ctMonthCur[i], ctMp=ctMonthPrev[i];   // 해당월 실적
     const ivMc=invMonthCur[i], ivMp=invMonthPrev[i]; // 해당월 실적
     const ctCv=ctCumCur[i],  ctPv=ctCumPrev[i];      // 누적(증감율용)
     const ivCv=invCumCur[i], ivPv=invCumPrev[i];     // 누적(증감율용)
-    const ctChg = ctPv ? chgBadge(ctCv, ctPv) : '<span style="color:var(--ink3);font-size:10px">-</span>';
-    const ivChg = ivPv ? chgBadge(ivCv, ivPv) : '<span style="color:var(--ink3);font-size:10px">-</span>';
+    const ctChg = ctPv ? chgBadge(ctCv, ctPv) : '<span style="color:var(--ink3);font-size:9.5px">-</span>';
+    const ivChg = ivPv ? chgBadge(ivCv, ivPv) : '<span style="color:var(--ink3);font-size:9.5px">-</span>';
     const isCurMonth = (baseYear===new Date().getFullYear() && m===new Date().getMonth()+1);
     const hi = isCurMonth ? 'box-shadow:inset 0 0 0 1.5px var(--brand);' : '';
     return `<tr>
-      <td class="ctr" style="font-weight:700;${hi}">${m}월</td>
-      <td class="num" style="background:${CT_BG};font-size:11px">${ctMp?fmt.money(ctMp):'-'}</td>
-      <td class="num" style="background:${CT_BG};font-size:11px;font-weight:600">${ctMc?fmt.money(ctMc):'-'}</td>
-      <td class="num" style="background:${CT_BG}">${ctChg}</td>
-      <td class="num" style="background:${INV_BG};font-size:11px">${ivMp?fmt.money(ivMp):'-'}</td>
-      <td class="num" style="background:${INV_BG};font-size:11px;font-weight:600">${ivMc?fmt.money(ivMc):'-'}</td>
-      <td class="num" style="background:${INV_BG}">${ivChg}</td>
+      <td class="ctr" style="font-weight:700;font-size:10px;padding:1px 5px;${hi}">${m}월</td>
+      <td class="num" style="background:${CT_BG};font-size:10px;padding:1px 5px">${ctMp?fmt.money(ctMp):'-'}</td>
+      <td class="num" style="background:${CT_BG};font-size:10px;font-weight:600;padding:1px 5px">${ctMc?fmt.money(ctMc):'-'}</td>
+      <td class="num" style="background:${CT_BG};padding:1px 5px">${ctChg}</td>
+      <td class="num" style="background:${INV_BG};font-size:10px;padding:1px 5px">${ivMp?fmt.money(ivMp):'-'}</td>
+      <td class="num" style="background:${INV_BG};font-size:10px;font-weight:600;padding:1px 5px">${ivMc?fmt.money(ivMc):'-'}</td>
+      <td class="num" style="background:${INV_BG};padding:1px 5px">${ivChg}</td>
     </tr>`;
   }).join('');
+
+  // 세로형(누적비교) 표 맨 아래 합계 행
+  const cumTotalRow = (function(){
+    const ctSum=ctMonthCur.reduce((a,b)=>a+b,0), ctSumP=ctMonthPrev.reduce((a,b)=>a+b,0);
+    const ivSum=invMonthCur.reduce((a,b)=>a+b,0), ivSumP=invMonthPrev.reduce((a,b)=>a+b,0);
+    const ctChgT = ctSumP ? chgBadge(ctSum, ctSumP) : '<span style="color:var(--ink3);font-size:9.5px">-</span>';
+    const ivChgT = ivSumP ? chgBadge(ivSum, ivSumP) : '<span style="color:var(--ink3);font-size:9.5px">-</span>';
+    return `<tr style="border-top:2px solid var(--line)">
+      <td class="ctr" style="font-weight:800;font-size:10px;padding:1px 5px">합계</td>
+      <td class="num" style="background:${CT_BG};font-size:10px;padding:1px 5px">${fmt.money(ctSumP)}</td>
+      <td class="num" style="background:${CT_BG};font-size:10px;font-weight:800;padding:1px 5px">${fmt.money(ctSum)}</td>
+      <td class="num" style="background:${CT_BG};padding:1px 5px">${ctChgT}</td>
+      <td class="num" style="background:${INV_BG};font-size:10px;padding:1px 5px">${fmt.money(ivSumP)}</td>
+      <td class="num" style="background:${INV_BG};font-size:10px;font-weight:800;padding:1px 5px">${fmt.money(ivSum)}</td>
+      <td class="num" style="background:${INV_BG};padding:1px 5px">${ivChgT}</td>
+    </tr>`;
+  })();
+
+  /* 전년대비 달성률 막대그래프 (1월~12월, 누적 기준 = 표의 증감율과 동일 데이터)
+     100% 이상(전년 달성/초과) = 빨간색, 100% 미만(미달성) = 파란색, 불투명도 30% */
+  function achievementChart(title, curCumArr, prevCumArr){
+    const W=300, H=360, PL=34, PR=38, PT=2, PB=24; // 하단 여백을 늘려 범례와 명확히 분리
+    const rowH = (H-PT-PB)/12;
+    const barMaxW = W-PL-PR;
+    const RED  = 'rgba(220,53,69,0.3)';
+    const BLUE = 'rgba(40,108,223,0.3)';
+    const RED_LINE  = 'rgba(220,53,69,0.9)';
+    const BLUE_LINE = 'rgba(40,108,223,0.9)';
+    let bars = '';
+    for(let i=0;i<12;i++){
+      const cv = curCumArr[i], pv = prevCumArr[i];
+      const pct = pv ? (cv/pv*100) : (cv>0?100:0); // 전년 누적 대비 달성률(%)
+      const capped = Math.min(pct, 150); // 막대 길이는 150%에서 클램프(시각적 과도 방지)
+      const w = Math.max(barMaxW * (capped/150), 2);
+      const isAchieved = pv ? (cv>=pv) : (cv>0);
+      const fill = isAchieved ? RED : BLUE;
+      const line = isAchieved ? RED_LINE : BLUE_LINE;
+      const textColor = isAchieved ? '#dc3545' : '#286cdf';
+      const y = PT + i*rowH;
+      const cy = y + rowH/2;
+      // 막대 사이 간격을 좁혀 12개월이 한 화면에 더 빽빽하게 들어오도록 조정
+      const slotH0 = rowH * 0.96;
+      const barH0  = slotH0 / 1.12;  // 두께:간격 비율을 더 촘촘하게(간격을 줄임)
+      const barH   = barH0 * 0.70;
+      const barY   = cy - barH/2;
+      bars += `<text x="${PL-6}" y="${cy+4}" text-anchor="end" font-size="10" fill="#5b6b7b">${i+1}월</text>`;
+      bars += `<rect x="${PL}" y="${barY}" width="${barMaxW}" height="${barH}" fill="#f3f5f7" rx="3"/>`;
+      bars += `<rect x="${PL}" y="${barY}" width="${w}" height="${barH}" fill="${fill}" stroke="${line}" stroke-width="1.2" rx="3"/>`;
+      // 막대가 충분히 길면(공간 30px 이상) 막대 안쪽 우측에, 짧으면 막대 바깥 우측에 라벨 표시
+      const labelText = pct.toFixed(0)+'%';
+      if(w > 30){
+        bars += `<text x="${PL+w-6}" y="${cy+4}" text-anchor="end" font-size="9.5" fill="${textColor}" font-weight="700">${labelText}</text>`;
+      } else {
+        bars += `<text x="${PL+w+5}" y="${cy+4}" text-anchor="start" font-size="9.5" fill="${textColor}" font-weight="700">${labelText}</text>`;
+      }
+    }
+    // 100% 기준선 (라벨은 그래프 하단에 표시해 상단 잘림 방지)
+    const x100 = PL + barMaxW * (100/150);
+    bars += `<line x1="${x100}" y1="${PT}" x2="${x100}" y2="${H-PB+6}" stroke="#aab5b3" stroke-width="1" stroke-dasharray="3,3"/>`;
+    bars += `<text x="${x100}" y="${H-1}" text-anchor="middle" font-size="8" fill="#92a0ae">100%</text>`;
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%;display:block;margin:0 auto">
+      ${bars}
+    </svg>`;
+  }
+  const ctAchChart  = achievementChart('계약금액 달성률 (전년누적 대비)', ctCumCur, ctCumPrev);
+  const invAchChart = achievementChart('발행금액 달성률 (전년누적 대비)', invCumCur, invCumPrev);
   const statRowsNew = yearStats.map((s,i)=>{
     const bg = s.y===String(baseYear) ? 'background:var(--brand-soft);' : '';
     const fw = s.y===String(baseYear) ? 'font-weight:700;' : '';
@@ -666,10 +830,13 @@ Views.dash = function(){
     <!-- KPI -->
     <div class="kpis" style="grid-template-columns:repeat(4,minmax(0,1fr)) minmax(170px,1.1fr)">
       <div class="kpi a"><div class="lb">${yearLabel} 계약</div><div class="vl">${cts.length}<small> 건</small></div></div>
-      <div class="kpi b"><div class="lb">${yearLabel} 계약금액</div><div class="vl">${fmt.money(totalAmt)}<small> 원</small></div></div>
-      <div class="kpi e"><div class="lb">${yearLabel} 세금계산서발행금액</div><div class="vl">${fmt.money(issuedAmt)}<small> 원</small></div></div>
+      <div class="kpi b"><div class="lb">${yearLabel} 계약금액</div><div class="vl">${fmt.money(totalAmt)}<small> 원</small></div>
+        <div style="margin-top:4px;font-size:10.5px;color:var(--ink3)">부가세포함 ${fmt.money(totalAmtVat)}원</div></div>
+      <div class="kpi e"><div class="lb">${yearLabel} 세금계산서발행금액</div><div class="vl">${fmt.money(issuedAmt)}<small> 원</small></div>
+        <div style="margin-top:4px;font-size:10.5px;color:var(--ink3)">부가세포함 ${fmt.money(issuedAmtVat)}원</div></div>
       <div class="kpi c"><div class="lb">${yearLabel} 미수금</div>
-        <div class="vl" style="color:${unpaidAmt>0?'var(--red)':'inherit'}">${fmt.money(unpaidAmt)}<small> 원</small></div></div>
+        <div class="vl" style="color:${unpaidAmt>0?'var(--red)':'inherit'}">${fmt.money(unpaidAmt)}<small> 원</small></div>
+        <div style="margin-top:4px;font-size:10.5px;color:var(--ink3)">부가세포함 ${fmt.money(unpaidAmtVat)}원</div></div>
 
       <!-- 통장 잔액 합계 (단독 카드) -->
       <div class="kpi d" style="cursor:pointer" onclick="showBankBalModal()">
@@ -682,87 +849,62 @@ Views.dash = function(){
       </div>
     </div>
 
-    <!-- 구분별 + 최근계약 (1행으로) -->
-    <div style="display:grid;grid-template-columns:360px 1fr;gap:10px;margin-bottom:12px">
-      <!-- 사업본부별 현황 (계약금액 + 계산서발행금액) -->
-      <div class="card" style="margin:0">
-        <div class="hd" style="padding:10px 14px"><h2 style="font-size:13px">사업본부별 현황 (${yearLabel})</h2></div>
+    <!-- 사업본부별 현황 -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="hd" style="padding:10px 14px"><h2 style="font-size:13px">사업본부별 현황 (${yearLabel})</h2></div>
+      <div style="display:grid;grid-template-columns:1fr 300px 300px;gap:0">
         <div class="bd np">
           <table class="grid" style="font-size:12px">
-            <thead><tr><th>사업본부</th><th class="ctr">건수</th><th class="num">계약금액</th><th class="num">계산서발행금액</th></tr></thead>
+            <thead><tr><th>사업본부</th><th class="ctr">건수</th><th class="num">계약금액</th><th class="num">계산서발행금액</th><th class="num">미수금(부가세제외)</th></tr></thead>
             <tbody>${typeRows}</tbody>
           </table>
         </div>
-      </div>
-      <!-- 최근 계약 -->
-      <div class="card" style="margin:0">
-        <div class="hd" style="padding:10px 14px"><h2 style="font-size:13px">최근 계약 (${yearLabel})</h2><span class="sp"></span><a href="#contracts" class="btn sm">전체보기</a></div>
-        <div class="bd np">
-          <table class="grid" style="font-size:12px">
-            <thead><tr><th>계약번호</th><th>계약명</th><th>업체명</th><th class="num">금액</th></tr></thead>
-            <tbody>${recentRows}</tbody>
-          </table>
-        </div>
+        <div style="padding:12px 10px;border-left:1px solid var(--line2)">${ctDonut}</div>
+        <div style="padding:12px 10px;border-left:1px solid var(--line2)">${invDonut}</div>
       </div>
     </div>
 
-    <!-- 3개년 비교 표 + 직전년도 월별 누적비교 -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0">
-      <!-- 최근 3개년 비교 -->
-      <div class="card" style="margin:0;display:flex;flex-direction:column">
-        <div class="hd" style="padding:11px 16px"><h2>최근 3개년 비교 (${baseYear-2}~${baseYear}년)</h2></div>
-        <div style="padding:0 16px 14px">
-          <table class="grid" style="font-size:12px;max-width:480px">
+    <!-- 월별 비교 (세로형, 1월~12월 누적증감율) + 달성률 그래프 -->
+    <div class="card" style="margin-bottom:0;display:flex;flex-direction:column;height:38vh;max-height:380px;min-height:280px">
+      <div class="hd" style="padding:6px 16px;flex:none"><h2 style="font-size:13px">월별 비교 — ${curYear}년 vs ${prevYear}년 <span style="font-size:11px;color:var(--ink3);font-weight:500">(증감율은 1월~해당월 누적 기준 · 금액은 부가세 별도)</span></h2></div>
+      <div style="display:grid;grid-template-columns:1fr 280px 280px;gap:0;flex:1;min-height:0">
+        <div class="bd np" style="overflow-y:hidden;height:100%">
+          <table class="grid" style="font-size:11px;height:100%">
             <thead><tr>
-              <th class="ctr">년도</th><th class="ctr">계약수</th>
-              <th class="num">계약금액</th><th class="num">발행금액</th>
-            </tr></thead>
-            <tbody>${statRowsNew}</tbody>
-          </table>
-        </div>
-      </div>
-      <!-- 직전년도 월별 비교 -->
-      <div class="card" style="margin:0;display:flex;flex-direction:column">
-        <div class="hd" style="padding:11px 16px"><h2>월별 비교 — ${curYear}년 vs ${prevYear}년 <span style="font-size:11px;color:var(--ink3);font-weight:500">(증감율은 1월~해당월 누적 기준)</span></h2></div>
-        <div class="bd np" style="flex:1;overflow-y:auto;max-height:420px">
-          <table class="grid" style="font-size:12px">
-            <thead><tr>
-              <th class="ctr" rowspan="2" style="vertical-align:middle">월</th>
-              <th class="num" colspan="3" style="background:#eef5f0">계약금액</th>
-              <th class="num" colspan="3" style="background:#eef2fa">발행금액</th>
+              <th class="ctr" rowspan="2" style="vertical-align:middle;font-size:10px;padding:2px 5px">월</th>
+              <th class="ctr" colspan="3" style="background:#eef5f0;font-weight:800;font-size:10px;padding:2px 5px">계약금액</th>
+              <th class="ctr" colspan="3" style="background:#eef2fa;font-weight:800;font-size:10px;padding:2px 5px">발행금액</th>
             </tr>
             <tr>
-              <th class="num" style="font-size:10.5px;background:#eef5f0">${prevYear}년</th>
-              <th class="num" style="font-size:10.5px;background:#eef5f0">${curYear}년</th>
-              <th class="num" style="font-size:10.5px;background:#eef5f0">증감율</th>
-              <th class="num" style="font-size:10.5px;background:#eef2fa">${prevYear}년</th>
-              <th class="num" style="font-size:10.5px;background:#eef2fa">${curYear}년</th>
-              <th class="num" style="font-size:10.5px;background:#eef2fa">증감율</th>
+              <th class="num" style="font-size:9.5px;background:#eef5f0;padding:1px 5px">${prevYear}년</th>
+              <th class="num" style="font-size:9.5px;background:#eef5f0;padding:1px 5px">${curYear}년</th>
+              <th class="num" style="font-size:9.5px;background:#eef5f0;padding:1px 5px">증감율</th>
+              <th class="num" style="font-size:9.5px;background:#eef2fa;padding:1px 5px">${prevYear}년</th>
+              <th class="num" style="font-size:9.5px;background:#eef2fa;padding:1px 5px">${curYear}년</th>
+              <th class="num" style="font-size:9.5px;background:#eef2fa;padding:1px 5px">증감율</th>
             </tr></thead>
-            <tbody>${cumTableRows}</tbody>
+            <tbody style="line-height:0.95">${cumTableRows}${cumTotalRow}</tbody>
           </table>
         </div>
+        <div style="border-left:1px solid var(--line2);height:100%;display:flex;flex-direction:column">
+          <div style="height:31px;flex:none;background:#f7f9fa;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:center">
+            <span style="font-size:11px;font-weight:800;color:var(--ink)">계약금액 달성률</span>
+          </div>
+          <div style="flex:1;min-height:0;padding:0 8px 10px;overflow:hidden;display:flex;align-items:stretch">${ctAchChart}</div>
+        </div>
+        <div style="border-left:1px solid var(--line2);height:100%;display:flex;flex-direction:column">
+          <div style="height:31px;flex:none;background:#f7f9fa;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:center">
+            <span style="font-size:11px;font-weight:800;color:var(--ink)">발행금액 달성률</span>
+          </div>
+          <div style="flex:1;min-height:0;padding:0 8px 10px;overflow:hidden;display:flex;align-items:stretch">${invAchChart}</div>
+        </div>
       </div>
-    </div>
-
-    <!-- 월별 비교 (전년 동월 대비) -->
-    <div class="card" style="margin-top:10px;margin-bottom:0">
-      <div class="hd" style="padding:11px 16px"><h2>월별 비교 — ${curYear}년 vs ${prevYear}년 <span style="font-size:11.5px;color:var(--ink3);font-weight:500">계약금액(계약일 기준) · 발행금액(발행일 기준)</span></h2></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
-        <div style="padding:10px 14px 6px;border-right:1px solid var(--line2)">${ctMonthChart}</div>
-        <div style="padding:10px 14px 6px">${invMonthChart}</div>
-      </div>
-      <div class="bd np" style="overflow-x:auto">
-        <table class="grid" style="font-size:11px;min-width:900px">
-          <thead><tr>
-            <th class="lbl" style="width:90px">구분</th>
-            ${[...Array(12)].map((_,i)=>`<th class="ctr">${i+1}월</th>`).join('')}
-          </tr></thead>
-          <tbody>
-            ${monthRow('계약금액('+curYear+')', ctMonthCur, ctMonthPrev)}
-            ${monthRow('발행금액('+curYear+')', invMonthCur, invMonthPrev)}
-          </tbody>
-        </table>
+      <div style="display:grid;grid-template-columns:1fr 560px">
+        <div></div>
+        <div style="padding:4px 12px 6px;font-size:10px;color:var(--ink3);display:flex;justify-content:center;gap:16px;border-top:1px solid var(--line2);flex:none">
+          <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:rgba(220,53,69,0.3);border:1px solid rgba(220,53,69,0.9);border-radius:2px;display:inline-block;flex:none"></span>전년대비 100% 이상 달성</span>
+          <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:rgba(40,108,223,0.3);border:1px solid rgba(40,108,223,0.9);border-radius:2px;display:inline-block;flex:none"></span>전년대비 미달성</span>
+        </div>
       </div>
     </div>
   `;
@@ -787,7 +929,8 @@ function _ctRows(){
 }
 function _renderContracts(){
   const list = _ctRows();
-  const sumTotal = list.reduce((s,c)=>s+(Number(c.supply)||0)+(Number(c.vat)||0),0);
+  const sumSupply = list.reduce((s,c)=>s+(Number(c.supply)||0),0); // 공급가액(부가세 별도) 합계
+  const sumTotal  = list.reduce((s,c)=>s+(Number(c.supply)||0)+(Number(c.vat)||0),0); // 부가세 포함 합계
   const rows = list.map(c=>{
     const total = (Number(c.supply)||0)+(Number(c.vat)||0);
     const invs = contractInvoices(c.id).filter(v=>v.issueDate);
@@ -813,11 +956,21 @@ function _renderContracts(){
   const tb = document.getElementById('ct-tbody');
   const sm = document.getElementById('ct-summary');
   if(tb) tb.innerHTML = rows;
-  if(sm) sm.textContent = `표시 ${list.length}건 · 합계 ${fmt.money(sumTotal)}원`;
+  if(sm) sm.innerHTML = `검색결과 <b>${list.length}</b>건`;
+  // 상단 KPI 카드 (대상년도 필터 등에 따라 동적 갱신)
+  const kpiBox = document.getElementById('ct-kpis');
+  if(kpiBox){
+    const yLabel = ctFilter.year ? ctFilter.year+'년 ' : '전체 ';
+    kpiBox.innerHTML = `
+      <div class="kpi a"><div class="lb">${yLabel}계약건수</div><div class="vl">${list.length}<small> 건</small></div></div>
+      <div class="kpi b"><div class="lb">${yLabel}계약금액(부가세포함)</div><div class="vl">${fmt.money(sumTotal)}<small> 원</small></div></div>
+      <div class="kpi e"><div class="lb">${yLabel}계약금액(부가세별도)</div><div class="vl">${fmt.money(sumSupply)}<small> 원</small></div></div>`;
+  }
 }
 Views.contracts = function(){
   const years = [...new Set(State.contracts.map(c=>c.year))].sort().reverse();
   document.getElementById('content').innerHTML = `
+    <div class="kpis" id="ct-kpis" style="grid-template-columns:repeat(3,minmax(160px,1fr))"></div>
     <div class="toolbar sticky-toolbar">
       <input type="search" id="ct-search" placeholder="계약번호·계약명·업체명 검색" value="${esc(ctFilter.q)}" oninput="searchInput(event,'ct')" style="width:240px">
       <select onchange="ctFilter.year=this.value;_renderContracts()">
@@ -829,7 +982,7 @@ Views.contracts = function(){
         ${Object.keys(TYPE_CODES).map(k=>`<option value="${k}" ${ctFilter.type===k?'selected':''}>${TYPE_CODES[k]}</option>`).join('')}
       </select>
       <span class="sp"></span>
-      <span id="ct-summary" style="font-size:12.5px;color:var(--ink2)"></span>
+      <span id="ct-summary" style="font-size:12.5px;color:var(--ink2);white-space:nowrap"></span>
       <button class="btn" onclick="Contracts.template()">업로드 양식</button>
       <label class="btn">엑셀 일괄등록<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="Contracts.importXlsx(this)"></label>
       <button class="btn" onclick="Contracts.exportXlsx()">엑셀 내보내기</button>
@@ -882,6 +1035,15 @@ const Contracts = {
           </div>
           <span class="hint">예: 일시불 계약은 [전체발행]만, 분할 계약은 [선급금]+[잔금] 등으로 선택</span>
         </div>
+        <div class="fld w2" style="border-top:1px dashed var(--line2);padding-top:10px;margin-top:4px">
+          <label style="font-size:12.5px;color:var(--ink2);font-weight:700">진단대상업체 담당자정보 <span style="font-size:11px;color:var(--ink3);font-weight:400">(업무화면 비표시, 진단일정 엑셀에만 출력)</span></label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
+            <input id="f-site-contact-name" placeholder="성명" value="${esc(c?c.siteContactName||'':'')}">
+            <input id="f-site-contact-phone" placeholder="연락처" value="${esc(c?c.siteContactPhone||'':'')}">
+            <input id="f-site-contact-email" placeholder="이메일" value="${esc(c?c.siteContactEmail||'':'')}">
+            <input id="f-site-address" placeholder="사업장주소" value="${esc(c?c.siteAddress||'':'')}">
+          </div>
+        </div>
         <div class="fld w2"><label>비고</label><input id="f-memo" value="${esc(c?c.memo||'':'')}"></div>
       </div>`;
     UI.openModal(c ? '계약 수정 — '+c.no : '계약 등록', body, [
@@ -932,6 +1094,10 @@ const Contracts = {
       toe: typeCode==='04' ? Number(g('f-toe').value)||0 : 0,
       grade: typeCode==='04' ? toeGrade(g('f-toe').value) : '',
       payKinds,
+      siteContactName:  g('f-site-contact-name')?.value.trim()  || '',
+      siteContactPhone: g('f-site-contact-phone')?.value.trim() || '',
+      siteContactEmail: g('f-site-contact-email')?.value.trim() || '',
+      siteAddress:      g('f-site-address')?.value.trim()       || '',
       memo: g('f-memo').value.trim()
     };
     if(id){
@@ -1106,10 +1272,11 @@ const Contracts = {
 /* =====================================================
    3) 세금계산서 — 더존식 그리드 (계약당 4행)
 ===================================================== */
-let invFilter    = { q:'', year:'', typeCode:'', onlyUnpaid:false };
+let invFilter    = { q:'', year:'', typeCode:'', onlyUnpaid:false, ctYear:'' };
 
 function _invHtml(){
   const cts = State.contracts.filter(c=>{
+    if(invFilter.ctYear && c.year !== invFilter.ctYear) return false; // 계약 대상년도 필터 (미발행 신규계약 검색용)
     if(invFilter.year){
       // 발행년도 필터: 해당 연도에 발행된 세금계산서가 있는 계약만 표시
       const hasIssueInYear = State.invoices.some(v=>v.contractId===c.id && v.issueDate && v.issueDate.slice(0,4)===invFilter.year);
@@ -1122,16 +1289,20 @@ function _invHtml(){
     }
     return true;
   }).sort((a,b)=>(b.no||'').localeCompare(a.no||''));
-  let html='', grandIssued=0, grandUnpaid=0;
+  let html='', grandIssued=0, grandUnpaid=0, grandIssuedSupply=0, grandUnpaidSupply=0, grandCnt=0;
   cts.forEach(c=>{
     const invs = INV_KINDS.map(k=>contractInvoices(c.id).find(v=>v.kind===k)).filter(Boolean);
     if(invFilter.onlyUnpaid && !invs.some(v=>v.issueDate && !v.paid)) return;
     const ctotal=(Number(c.supply)||0)+(Number(c.vat)||0);
     // 총 발행금액 합계: '세금계산서 발행일' 기준 연도로 집계 (연도 미선택 시 전체발행분 = 발행일이 있는 모든 건)
     const issuedInvs = invs.filter(v=>v.issueDate && (!invFilter.year || v.issueDate.slice(0,4)===invFilter.year));
-    const issuedSum = issuedInvs.reduce((s,v)=>s+invoiceTotal(v),0);
-    const paidSum   = issuedInvs.filter(v=>v.paid).reduce((s,v)=>s+invoiceTotal(v),0);
+    const issuedSum = issuedInvs.reduce((s,v)=>s+invoiceTotal(v),0); // 부가세포함
+    const issuedSumSupply = issuedInvs.reduce((s,v)=>s+(Number(v.supply)||0),0); // 부가세별도
+    const paidSum   = issuedInvs.filter(v=>v.paid).reduce((s,v)=>s+invoiceTotal(v),0); // 부가세포함
+    const paidSumSupply = issuedInvs.filter(v=>v.paid).reduce((s,v)=>s+(Number(v.supply)||0),0); // 부가세별도
     grandIssued+=issuedSum; grandUnpaid+=issuedSum-paidSum;
+    grandIssuedSupply+=issuedSumSupply; grandUnpaidSupply+=issuedSumSupply-paidSumSupply;
+    grandCnt+=issuedInvs.length;
     const bodyRows=invs.map(v=>{
         const tot = invoiceTotal(v);
         return `<tr>
@@ -1164,23 +1335,37 @@ function _invHtml(){
         ${bodyRows}
       </table>`;
   });
-  return { html: html||`<div class="card"><div class="empty"><b>표시할 계약이 없습니다</b>계약관리에서 계약 등록 시 체크한 결제방식 행이 자동 생성됩니다</div></div>`, grandIssued, grandUnpaid };
+  return { html: html||`<div class="card"><div class="empty"><b>표시할 계약이 없습니다</b>계약관리에서 계약 등록 시 체크한 결제방식 행이 자동 생성됩니다</div></div>`, grandIssued, grandUnpaid, grandIssuedSupply, grandUnpaidSupply, grandCnt };
 }
 
 
 function _renderInvoices(){
-  const {html, grandIssued, grandUnpaid} = _invHtml();
+  const {html, grandIssued, grandUnpaid, grandIssuedSupply, grandUnpaidSupply, grandCnt} = _invHtml();
   const wrap = document.getElementById('inv-list');
   const sm   = document.getElementById('inv-summary');
   if(wrap) wrap.innerHTML = html;
-  const yearLabel = invFilter.year ? invFilter.year+'년 발행분 ' : '';
-  if(sm)   sm.innerHTML   = `${yearLabel}총발행 <b>${fmt.num(grandIssued)}</b>원 · 총미수 <b style="color:var(--red)">${fmt.num(grandUnpaid)}</b>원`;
+  if(sm)   sm.innerHTML   = `검색결과 <b>${grandCnt}</b>건`;
+  // 상단 KPI 카드 (발행년도 필터 등에 따라 동적 갱신)
+  const kpiBox = document.getElementById('inv-kpis');
+  if(kpiBox){
+    const yLabel = invFilter.year ? invFilter.year+'년 ' : '전체 ';
+    kpiBox.innerHTML = `
+      <div class="kpi a"><div class="lb">${yLabel}발행건수</div><div class="vl">${grandCnt}<small> 건</small></div></div>
+      <div class="kpi b"><div class="lb">${yLabel}발행금액(부가세포함)</div><div class="vl">${fmt.money(grandIssued)}<small> 원</small></div></div>
+      <div class="kpi e"><div class="lb">${yLabel}발행금액(부가세별도)</div><div class="vl">${fmt.money(grandIssuedSupply)}<small> 원</small></div></div>
+      <div class="kpi c"><div class="lb">${yLabel}총미수금(부가세포함)</div><div class="vl" style="color:${grandUnpaid>0?'var(--red)':'inherit'}">${fmt.money(grandUnpaid)}<small> 원</small></div></div>
+      <div class="kpi a"><div class="lb">${yLabel}총미수금(부가세별도)</div><div class="vl" style="color:${grandUnpaidSupply>0?'var(--red)':'inherit'}">${fmt.money(grandUnpaidSupply)}<small> 원</small></div></div>`;
+  }
 }
 Views.invoices = function(){
-  const {html, grandIssued, grandUnpaid} = _invHtml();
   document.getElementById('content').innerHTML = `
+    <div class="kpis" id="inv-kpis" style="grid-template-columns:repeat(5,minmax(150px,1fr))"></div>
     <div class="toolbar sticky-toolbar">
       <input type="search" id="inv-search" placeholder="계약번호·계약명·업체명 검색" value="${esc(invFilter.q)}" oninput="searchInput(event,'inv')" style="width:200px">
+      <select onchange="invFilter.ctYear=this.value;_renderInvoices()" title="계약 대상년도로 검색 (미발행 신규 계약 찾기용)">
+        <option value="">계약년도 전체</option>
+        ${[...new Set(State.contracts.map(c=>c.year).filter(Boolean))].sort().reverse().map(y=>`<option value="${y}" ${invFilter.ctYear===y?'selected':''}>${y}년 계약</option>`).join('')}
+      </select>
       <select onchange="invFilter.year=this.value;_renderInvoices()" title="세금계산서 발행일 기준 연도로 필터링 및 합계 집계">
         <option value="">발행년도 전체</option>
         ${[...new Set(State.invoices.filter(v=>v.issueDate).map(v=>v.issueDate.slice(0,4)))].sort().reverse().map(y=>`<option value="${y}" ${invFilter.year===y?'selected':''}>${y}년 발행분</option>`).join('')}
@@ -1193,12 +1378,13 @@ Views.invoices = function(){
         <input type="checkbox" ${invFilter.onlyUnpaid?'checked':''} onchange="invFilter.onlyUnpaid=this.checked;_renderInvoices()"> 미수금만 보기
       </label>
       <span class="sp"></span>
-      <span id="inv-summary" style="font-size:12.5px;color:var(--ink2)">총발행 <b>${fmt.num(grandIssued)}</b>원 · 총미수 <b style="color:var(--red)">${fmt.num(grandUnpaid)}</b>원</span>
+      <span id="inv-summary" style="font-size:12.5px;color:var(--ink2);white-space:nowrap"></span>
       <button class="btn" onclick="Invoices.template()">업로드 양식</button>
       <label class="btn">엑셀 일괄등록<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="Invoices.importXlsx(this)"></label>
       <button class="btn" onclick="Invoices.exportXlsx()">엑셀 내보내기</button>
     </div>
-    <div id="inv-list">${html}</div>`;
+    <div id="inv-list"></div>`;
+  _renderInvoices();
 };
 
 const Invoices = {
@@ -1391,6 +1577,98 @@ const Invoices = {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '세금계산서');
     XLSX.writeFile(wb, `엔자인_세금계산서_${todayStr()}.xlsx`);
+  },
+
+  /* 일괄등록 업로드 양식 다운로드 */
+  template(){
+    const sample = [{
+      '계약번호':'EN202401001', '구분':'전체발행', '발행일':'2024-03-15',
+      '공급가액':10000000, '세액':1000000,
+      '입금여부':'미수', '입금일':'', '비고':'예시 행입니다. 지우고 입력하세요'
+    }];
+    const guide = XLSX.utils.aoa_to_sheet([
+      ['엔자인 ERP 세금계산서 일괄등록 양식 안내'],[''],
+      ['열 이름','설명'],
+      ['계약번호','필수. 계약관리에 등록된 계약번호와 정확히 일치해야 합니다 (예: EN202401001)'],
+      ['구분','필수. 전체발행 / 선급금 / 중도금 / 잔금 중 하나. 해당 계약의 결제방식에 포함된 구분만 인식됩니다'],
+      ['발행일','YYYY-MM-DD 형식'],
+      ['공급가액','숫자만 입력 (쉼표 없이)'],
+      ['세액','숫자만 입력. 비우면 공급가액의 10%로 자동 계산'],
+      ['입금여부','입금 / 미수 (비우면 미수로 처리)'],
+      ['입금일','입금여부가 입금일 때만 입력. YYYY-MM-DD'],
+      ['비고','선택'],[''],
+      ['※ 계약번호+구분이 일치하는 기존 행이 있으면 덮어씁니다'],
+      ['※ 계약번호를 찾을 수 없는 행은 건너뜁니다']
+    ]);
+    guide['!cols'] = [{wch:12},{wch:70}];
+    const ws = XLSX.utils.json_to_sheet(sample);
+    ws['!cols'] = [{wch:14},{wch:10},{wch:12},{wch:12},{wch:10},{wch:10},{wch:12},{wch:30}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '세금계산서입력');
+    XLSX.utils.book_append_sheet(wb, guide, '작성안내');
+    XLSX.writeFile(wb, '엔자인_세금계산서등록양식.xlsx');
+  },
+
+  /* 일괄등록 엑셀 업로드 */
+  importXlsx(input){
+    const file = input.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async e=>{
+      try{
+        const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
+        const sheetName = wb.SheetNames.includes('세금계산서입력') ? '세금계산서입력' : wb.SheetNames[0];
+        const json = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {defval:''});
+        let ok=0; const errors=[];
+        json.forEach((r,i)=>{
+          const rowNo = i+2;
+          const keys = Object.keys(r);
+          const get = names=>{ const k=keys.find(k=>names.some(n=>k.replace(/\s/g,'').includes(n))); return k!=null?String(r[k]||'').trim():''; };
+          const ctNo = get(['계약번호']);
+          if(!ctNo){ if(keys.some(k=>String(r[k]).trim()!=='')) errors.push(rowNo+'행: 계약번호 누락'); return; }
+          const c = State.contracts.find(x=>x.no===ctNo);
+          if(!c){ errors.push(rowNo+'행: 계약번호 ['+ctNo+']을 찾을 수 없음'); return; }
+          const kind = get(['구분']);
+          const v = contractInvoices(c.id).find(x=>x.kind===kind);
+          if(!v){ errors.push(rowNo+'행: ['+ctNo+'] 계약에 ['+kind+'] 구분이 없음 (결제방식 확인)'); return; }
+          let issueDate = get(['발행일']);
+          if(r['발행일'] instanceof Date) issueDate = r['발행일'].toISOString().slice(0,10);
+          else issueDate = issueDate.slice(0,10).replace(/[./]/g,'-');
+          const supply = fmt.parseNum(get(['공급가액'])||'0');
+          let vat = get(['세액']);
+          vat = vat ? fmt.parseNum(vat) : Math.round(supply*0.1);
+          const paidRaw = get(['입금여부']);
+          const paid = paidRaw === '입금';
+          let paidDate = get(['입금일']);
+          if(r['입금일'] instanceof Date) paidDate = r['입금일'].toISOString().slice(0,10);
+          else paidDate = paidDate.slice(0,10).replace(/[./]/g,'-');
+          v.issueDate = issueDate.length===10 ? issueDate : '';
+          v.supply = supply;
+          v.vat = vat;
+          v.paid = paid;
+          v.paidDate = paid && paidDate.length===10 ? paidDate : (paid ? todayStr() : '');
+          v.memo = get(['비고']) || v.memo;
+          ok++;
+        });
+        if(ok===0 && !errors.length){
+          toast('처리할 데이터가 없습니다');
+          input.value=''; return;
+        }
+        toast('저장 중...');
+        try{
+          await State.saveAll();
+        }catch(saveErr){
+          toast('❌ 저장 실패: '+saveErr.message+' (변경사항이 저장되지 않았습니다)');
+          input.value=''; return;
+        }
+        _renderInvoices();
+        let msg = '✅ '+ok+'건 저장 완료';
+        if(errors.length) msg += ' · 건너뜀 '+errors.length+'건';
+        toast(msg);
+        if(errors.length) setTimeout(()=>alert('건너뛴 행:\n'+errors.join('\n')),300);
+      }catch(err){ toast('가져오기 실패: 파일 형식을 확인하세요'); console.error(err); }
+      input.value='';
+    };
+    reader.readAsArrayBuffer(file);
   }
 };
 
@@ -2135,20 +2413,25 @@ const SupaAuth = {
     _supaUser=user;
     const {data:prof}=await supa.from('staff_profiles').select('*').eq('email',user.email).maybeSingle();
     _supaProfile=prof||{name:user.email,role:'관리자'};
-    SupaAuth.applyMenus();SupaAuth.renderUser();
+    SupaAuth.renderUser();
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app-screen').style.display='flex';
-    await supaLoadAll();startRealtime();route();
+    await supaLoadAll();
+    SupaAuth.applyMenus(); // State.auth.roles 로드 완료 후 메뉴 재적용
+    startRealtime();route();
+    SupaAuth.renderHandoverAlerts(true); // 데이터 로드 완료 후 인수확인 팝업 표시 (로그인 시 1회)
   },
   async onLoginWithProfile(localUser){
     _supaUser={id:localUser.userId,email:localUser.email||''};
     _supaProfile={name:localUser.name,role:localUser.role};
-    SupaAuth.applyMenus();SupaAuth.renderUser();
+    SupaAuth.renderUser();
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app-screen').style.display='flex';
     await supaLoadAll();
+    SupaAuth.applyMenus(); // State.auth.roles 로드 완료 후 메뉴 재적용 (정확한 권한 매트릭스 기준)
     startRealtime();
     route();
+    SupaAuth.renderHandoverAlerts(true); // 데이터 로드 완료 후 인수확인 팝업 표시 (로그인 시 1회)
   },
   applyMenus(){
     const role = _supaProfile?.role||'일반직원';
@@ -2174,6 +2457,56 @@ const SupaAuth = {
       if(grp.textContent.trim()==='CF') grp.style.display=showCF?'':'none';
     });
   },
+  // 현재 로그인 사용자의 menuKey에 대한 권한 레벨 반환: 'rw' | 'r' | 'none'
+  getPermLevel(menuKey){
+    const role = _supaProfile?.role||'일반직원';
+    if(role==='관리자') return 'rw';
+    const perms = (State.auth.roles[role]||{}).perms || {};
+    if(Object.keys(perms).length>0) return perms[menuKey] || 'none';
+    // 매트릭스 미등록 역할: ROLE_MENUS 기본값 기준으로 해당 메뉴가 있으면 rw로 간주(하위호환)
+    const allowed = ROLE_MENUS[role]||ROLE_MENUS['일반직원'];
+    return allowed.includes(menuKey) ? 'rw' : 'none';
+  },
+  // 현재 화면(menuKey)이 읽기전용이면 등록/수정/삭제 버튼과 입력요소를 비활성화
+  applyReadOnly(menuKey){
+    const level = SupaAuth.getPermLevel(menuKey);
+    const isReadOnly = level === 'r';
+    if(!isReadOnly) return;
+    setTimeout(function(){
+      const content = document.getElementById('content');
+      if(!content) return;
+      // 쓰기 동작을 유발하는 버튼들을 비활성화 (수정/삭제/등록/저장/일괄등록/체크박스 등)
+      content.querySelectorAll('button, label.btn').forEach(function(btn){
+        const text = (btn.textContent||'').trim();
+        const onclickAttr = btn.getAttribute('onclick')||'';
+        // 본인 확인 행위(장비 인수확인)는 읽기전용 권한이어도 항상 허용
+        const isSelfConfirm = /confirmReceive|doConfirmReceive/.test(onclickAttr);
+        if(isSelfConfirm) return;
+        const isWriteAction = /등록|수정|삭제|저장|일괄|발행|입금|매칭|업로드|초기화|배정|역할|PIN/.test(text)
+          || onclickAttr.match(/\.(save|del|edit|create|update|remove|import|upload|reset)\(/i);
+        if(isWriteAction){
+          btn.disabled = true;
+          btn.style.opacity = '0.45';
+          btn.style.cursor = 'not-allowed';
+          btn.title = '읽기 전용 권한입니다';
+          btn.onclick = function(e){ e.preventDefault(); e.stopPropagation(); toast('읽기 전용 권한입니다'); return false; };
+        }
+      });
+      // 체크박스/입력값 변경도 막음 (단, 검색창은 예외)
+      content.querySelectorAll('input[type="checkbox"], input[type="file"]').forEach(function(el){
+        if(el.closest('.toolbar')) return; // 검색창/필터는 허용
+        el.disabled = true;
+      });
+      // 안내 배너 표시
+      if(!document.getElementById('readonly-banner')){
+        const banner = document.createElement('div');
+        banner.id = 'readonly-banner';
+        banner.style.cssText = 'background:#fff3e0;color:#e65100;padding:7px 14px;border-radius:7px;font-size:12.5px;margin-bottom:10px;font-weight:600';
+        banner.textContent = '🔒 읽기 전용 권한입니다. 등록/수정/삭제가 제한됩니다.';
+        content.insertBefore(banner, content.firstChild);
+      }
+    }, 50);
+  },
   renderUser(){
     const el=document.getElementById('supa-user');if(!el)return;
     const name=_supaProfile?.name||'';
@@ -2182,6 +2515,50 @@ const SupaAuth = {
     el.innerHTML='<div style="color:#cfd9d6;font-weight:700;font-size:12.5px;margin-bottom:1px">'+esc(name)+'</div>'
       +'<div style="color:'+roleColor+';font-size:11px;margin-bottom:6px">'+esc(role)+'</div>'
       +'<button onclick="SupaAuth.logout()" style="width:100%;background:transparent;border:1px solid #3a4f4a;color:#7d918c;border-radius:6px;padding:5px;font-size:11px;cursor:pointer">로그아웃</button>';
+    SupaAuth.renderHandoverAlerts();
+  },
+
+  // 로그인한 사람에게 본인이 인수해야 할(확인 대기중인) 장비 인수인계가 있으면 알림 표시
+  renderHandoverAlerts(showPopup){
+    const myName = _supaProfile?.name;
+    if(!myName) return;
+    const pendingList = (State.equip||[]).filter(eq=>
+      eq.pendingHandoverId && eq.pendingHolderName === myName
+    );
+    const old = document.getElementById('handover-alert-banner');
+    if(old) old.remove();
+    if(!pendingList.length) return;
+
+    const banner = document.createElement('div');
+    banner.id = 'handover-alert-banner';
+    banner.style.cssText = 'position:fixed;top:14px;right:14px;z-index:9999;max-width:340px;';
+    banner.innerHTML = pendingList.map(eq=>{
+      const rec = (eq.handoverHistory||[]).find(r=>r.id===eq.pendingHandoverId);
+      return '<div style="background:#fff3e0;border:1.5px solid #ffb74d;border-radius:10px;padding:12px 14px;margin-bottom:8px;box-shadow:0 6px 20px rgba(0,0,0,.15);cursor:pointer" onclick="Equip.confirmReceive(\''+eq.id+'\',\''+(rec?rec.id:'')+'\')">'
+        + '<div style="font-weight:800;color:#e65100;font-size:13px;margin-bottom:3px">🔔 장비 인수 확인 필요</div>'
+        + '<div style="font-size:12.5px;color:var(--ink)">'+esc(eq.equipName)+(eq.equipNo?' ('+esc(eq.equipNo)+')':'')+'</div>'
+        + '<div style="font-size:11.5px;color:var(--ink3);margin-top:2px">인계자: '+esc(rec?rec.fromName:'')+' · 클릭하여 확인</div>'
+        + '</div>';
+    }).join('');
+    document.body.appendChild(banner);
+
+    // 로그인 직후 1회 팝업창으로도 안내 (배너를 놓치지 않도록)
+    if(showPopup && typeof UI!=='undefined' && UI.openModal){
+      const itemsHtml = pendingList.map(eq=>{
+        const rec = (eq.handoverHistory||[]).find(r=>r.id===eq.pendingHandoverId);
+        return '<div style="border:1px solid var(--line2);border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer" onclick="UI.closeModal();Equip.confirmReceive(\''+eq.id+'\',\''+(rec?rec.id:'')+'\')">'
+          + '<div style="font-weight:700;font-size:13px;color:var(--ink)">'+esc(eq.equipName)+(eq.equipNo?' ('+esc(eq.equipNo)+')':'')+'</div>'
+          + '<div style="font-size:12px;color:var(--ink3);margin-top:2px">인계자: '+esc(rec?rec.fromName:'')+' · 인계일: '+esc(rec?rec.date:'')+'</div>'
+          + '<div style="font-size:11.5px;color:var(--brand);margin-top:4px;font-weight:600">클릭하여 인수확인 →</div>'
+          + '</div>';
+      }).join('');
+      const body = '<div style="font-size:13px;color:var(--ink2);margin-bottom:12px">아래 장비의 인수 확인 및 정상작동 여부 확인이 필요합니다.</div>' + itemsHtml;
+      setTimeout(function(){
+        UI.openModal('🔔 장비 인수 확인 필요 ('+pendingList.length+'건)', body, [
+          {label:'나중에 확인', onClick:UI.closeModal}
+        ]);
+      }, 600); // 화면 전환 직후 바로 띄우면 다른 렌더링과 겹칠 수 있어 약간 지연
+    }
   },
   async logout(){
     if(!confirm('로그아웃 하시겠습니까?'))return;
@@ -2209,6 +2586,8 @@ const _conv={
   hrFrom:function(r){return{id:r.id,name:r.name,dept:r.dept,position:r.position,rank:r.rank,joinDate:r.join_date,status:r.status||'재직',birth:r.birth,email:r.email,phone:r.phone,memo:r.memo};},
   ediagTo:function(d){return{id:d.id,contract_id:d.contractId,leader:d.leader||null,members:d.members||[],start_date:d.startDate||null,end_date:d.endDate||null,memo:d.memo||null,member_schedules:d.memberSchedules||{},files:d.files||{}};},
   ediagFrom:function(r){return{id:r.id,contractId:r.contract_id,leader:r.leader,members:r.members||[],startDate:r.start_date,endDate:r.end_date,memo:r.memo,memberSchedules:r.member_schedules||{},files:r.files||{}};},
+  equipTo:function(e){return{id:e.id,equip_name:e.equipName||'',equip_no:e.equipNo||'',sn:e.sn||'',calibration_history:e.calibrationHistory||'',purchase_year:e.purchaseYear||'',failure_history:e.failureHistory||'',memo:e.memo||'',holder_name:e.holderName||'',holder_since:e.holderSince||'',handover_history:e.handoverHistory||[],pending_handover_id:e.pendingHandoverId||null,pending_holder_name:e.pendingHolderName||null};},
+  equipFrom:function(r){return{id:r.id,equipName:r.equip_name,equipNo:r.equip_no,sn:r.sn,calibrationHistory:r.calibration_history,purchaseYear:r.purchase_year,failureHistory:r.failure_history,memo:r.memo,holderName:r.holder_name||'',holderSince:r.holder_since||'',handoverHistory:r.handover_history||[],pendingHandoverId:r.pending_handover_id||null,pendingHolderName:r.pending_holder_name||null};},
 };
 
 async function supaLoadAll(){
@@ -2221,6 +2600,7 @@ async function supaLoadAll(){
       supa.from('hr').select('*'),
       supa.from('ediag').select('*'),
       supa.from('auth_settings').select('*').eq('id',1).maybeSingle(),
+      supa.from('equip').select('*'),
     ]);
     State.contracts=(results[0].data||[]).map(_conv.ctFrom);
     State.invoices=(results[1].data||[]).map(_conv.invFrom);
@@ -2229,6 +2609,7 @@ async function supaLoadAll(){
     State.hr=(results[4].data||[]).map(_conv.hrFrom);
     State.ediag=(results[5].data||[]).map(_conv.ediagFrom);
     State.auth=results[6].data?{roles:results[6].data.roles||{},users:results[6].data.users||{}}:{roles:{},users:{}};
+    State.equip=(results[7].data||[]).map(_conv.equipFrom);
     // 팀 기반 필터링 적용
     applyTeamFilter();
   }catch(e){console.error('로드 오류:',e);}
@@ -2284,6 +2665,7 @@ State.saveAll=async function(){
     if(State.contracts.length){ jobs.push(supa.from('contracts').upsert(State.contracts.map(_conv.ctTo))); labels.push('contracts'); }
     if(State.invoices.length){  jobs.push(supa.from('invoices').upsert(State.invoices.map(_conv.invTo)));  labels.push('invoices'); }
     if(State.ediag.length){     jobs.push(supa.from('ediag').upsert(State.ediag.map(_conv.ediagTo)));      labels.push('ediag'); }
+    if(State.equip.length){     jobs.push(supa.from('equip').upsert(State.equip.map(_conv.equipTo)));      labels.push('equip'); }
     // 메모리(State)에서 삭제된 행이 Supabase에 남아있지 않도록 명시적으로 제거
     // (팀 필터링 대상 사용자는 본인이 못 보는 데이터를 건드릴 수 없으므로 제외)
     if(!isFiltered){
@@ -2297,6 +2679,17 @@ State.saveAll=async function(){
         var dbCtRes = await supa.from('contracts').select('id');
         var orphanCtIds = (dbCtRes.data||[]).map(function(r){return r.id;}).filter(function(id){return !liveCtIds.has(id);});
         if(orphanCtIds.length) jobs.push(supa.from('contracts').delete().in('id', orphanCtIds));
+
+        // 진단팀 구성(ediag) 삭제도 Supabase에 명시적으로 반영 (팀 구성 삭제 시 다른 사용자 화면에 반영되도록)
+        var liveEdiagIds = new Set(State.ediag.map(function(d){return d.id;}));
+        var dbEdiagRes = await supa.from('ediag').select('id');
+        var orphanEdiagIds = (dbEdiagRes.data||[]).map(function(r){return r.id;}).filter(function(id){return !liveEdiagIds.has(id);});
+        if(orphanEdiagIds.length) jobs.push(supa.from('ediag').delete().in('id', orphanEdiagIds));
+
+        var liveEquipIds = new Set(State.equip.map(function(e){return e.id;}));
+        var dbEquipRes = await supa.from('equip').select('id');
+        var orphanEquipIds = (dbEquipRes.data||[]).map(function(r){return r.id;}).filter(function(id){return !liveEquipIds.has(id);});
+        if(orphanEquipIds.length) jobs.push(supa.from('equip').delete().in('id', orphanEquipIds));
       }catch(e){ console.error('고아행 정리 오류:', e); }
     }
     if(!isFiltered){
@@ -2389,7 +2782,11 @@ const PinAuth={
   _setupPin:'',_confirmPin:'',_loginPin:'',_step:'setup',_localUser:null,
   async init(){
     try{this._localUser=JSON.parse(localStorage.getItem('ensign_local_user')||'null');}catch(e){}
-    if(this._localUser){this.showPinLogin();}else{this.showSetup();}
+    var pending=null;
+    try{pending=JSON.parse(localStorage.getItem('ensign_pending_user')||'null');}catch(e){}
+    if(this._localUser){this.showPinLogin();}
+    else if(pending){this._showPendingScreen(pending.name);}
+    else{this.showSetup();}
   },
   showSetup(){
     document.getElementById('pin-setup').style.display='block';
@@ -2447,6 +2844,10 @@ const PinAuth={
         this._confirmPin+=digit;this._dots('confirm-dots',this._confirmPin.length);
         if(this._confirmPin.length===6) setTimeout(function(){self._finishSetup();},200);
       }
+    } else if(mode==='switching'){
+      if(this._loginPin.length>=6)return;
+      this._loginPin+=digit;this._dots('pin-dots',this._loginPin.length);
+      if(this._loginPin.length===6) setTimeout(function(){self._verifySwitchPin();},200);
     } else {
       if(this._loginPin.length>=6)return;
       this._loginPin+=digit;this._dots('pin-dots',this._loginPin.length);
@@ -2472,14 +2873,17 @@ const PinAuth={
     var profRes=await supa.from('staff_profiles').select('role,email').eq('name',name);
     var role=(profRes.data&&profRes.data.length>0&&profRes.data[0].role)?profRes.data[0].role:'일반직원';
     var email=(profRes.data&&profRes.data.length>0&&profRes.data[0].email)?profRes.data[0].email:'';
+
     var localUser={userId:hr.id,name:hr.name,role:role,email:email,rank:hr.rank,dept:hr.dept};
     var pinHash=this._hash(this._setupPin,hr.id);
-    localStorage.setItem('ensign_local_user',JSON.stringify(Object.assign({},localUser,{pinHash:pinHash})));
+    // 이 기기에 영구 등록 (한 기기 = 한 사람, "다른 계정으로 로그인" 기능 제거로 승인 절차 불필요)
+    localStorage.setItem('ensign_local_user', JSON.stringify(Object.assign({},localUser,{pinHash:pinHash, registeredAt:new Date().toISOString()})));
     localStorage.setItem('ensign_pin_fail','0');
-    this._localUser=localUser;
-    this.showPinLogin();
+    this._localUser = localUser;
+    SupaAuth.onLoginWithProfile(localUser);
   },
-  async _verifyPin(){
+
+    async _verifyPin(){
     var errEl=document.getElementById('pin-error');errEl.style.display='none';
     var stored=JSON.parse(localStorage.getItem('ensign_local_user')||'null');
     var failCount=parseInt(localStorage.getItem('ensign_pin_fail')||'0');
@@ -2491,9 +2895,24 @@ const PinAuth={
     var pinHash=this._hash(this._loginPin,stored?.userId||'');
     if(stored&&pinHash===stored.pinHash){
       localStorage.setItem('ensign_pin_fail','0');
-      // staff_profiles에서 최신 역할 다시 조회
-      var profRes=await supa.from('staff_profiles').select('role,email').eq('name',stored.name);
-      if(profRes.data&&profRes.data.length>0){stored.role=profRes.data[0].role||stored.role;}
+      // staff_profiles에서 최신 역할 + PIN 초기화 여부 조회
+      var profRes=await supa.from('staff_profiles').select('role,email,pin_reset_at').eq('name',stored.name);
+      if(profRes.data&&profRes.data.length>0){
+        stored.role=profRes.data[0].role||stored.role;
+        var resetAt = profRes.data[0].pin_reset_at;
+        // registeredAt이 없는 기존 등록자는 0(아주 오래 전)으로 간주해 비교 — pin_reset_at이 있으면 무조건 초기화 대상
+        var regAt = stored.registeredAt ? new Date(stored.registeredAt) : new Date(0);
+        if(resetAt && new Date(resetAt) > regAt){
+          // 관리자가 PIN을 초기화함 → 이 기기의 등록 정보를 지우고 재등록 화면으로
+          localStorage.removeItem('ensign_local_user');
+          localStorage.removeItem('ensign_pin_session');
+          this._localUser = null;
+          errEl.textContent = '관리자가 PIN을 초기화했습니다. 다시 등록해주세요.';
+          errEl.style.display = 'block';
+          setTimeout(function(){ PinAuth.showSetup(); }, 1500);
+          return;
+        }
+      }
       this._localUser=stored;
       // 새로고침 시 PIN 재입력 없이 유지되도록 세션 토큰 저장 (2시간)
       localStorage.setItem('ensign_pin_session', JSON.stringify({user:stored, expires:Date.now()+2*60*60*1000}));
@@ -2538,6 +2957,10 @@ const PinAuth={
     ]);
   },
   cancelSetup(){this.showPinLogin();},
+
+  // 관리자가 직원 PIN을 원격 초기화했을 때, 그 직원의 화면에서 호출되어 등록 화면으로 돌아감
+  // (보안: "다른 계정으로 로그인" 기능은 타인 행세 위험으로 제거되었습니다.
+  //  PIN 분실 시 관리자에게 요청 → 관리자가 권한관리에서 초기화 → 본인이 다시 이름+PIN 등록)
   switchUser(){localStorage.removeItem('ensign_local_user');localStorage.setItem('ensign_pin_fail','0');this._localUser=null;this.showSetup();},
   _hash:function(pin,salt){var h=0;var s=pin+salt+'ensign2024';for(var i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h=h&h;}return Math.abs(h).toString(36)+s.length.toString(36);}
 };
@@ -2916,6 +3339,7 @@ const AUTH_MENUS = [
   { key:'contracts',  label:'계약관리' },
   { key:'ediagmail',  label:'진단일정등록' },
   { key:'ediag',      label:'에너지진단' },
+  { key:'equip',      label:'진단장비현황' },
   { key:'invoices',   label:'세금계산서' },
   { key:'bank',       label:'통장거래' },
   { key:'match',      label:'입금매칭' },
@@ -2926,11 +3350,11 @@ const AUTH_MENUS = [
   { key:'settings',   label:'설정/백업' },
 ];
 const AUTH_ROLES_DEFAULT = [
-  { name:'관리자',    perms:{ contracts:'rw', invoices:'rw', bank:'rw', match:'rw', savings:'rw', dash:'rw', hr:'rw', auth:'rw', settings:'rw' } },
-  { name:'계약담당',  perms:{ contracts:'rw', invoices:'rw', bank:'r',  match:'r',  savings:'none', dash:'r', hr:'none', auth:'none', settings:'none' } },
-  { name:'자금담당',  perms:{ contracts:'r',  invoices:'r',  bank:'rw', match:'rw', savings:'rw',  dash:'r', hr:'none', auth:'none', settings:'none' } },
-  { name:'일반직원',  perms:{ contracts:'r',  invoices:'r',  bank:'none',match:'none',savings:'none',dash:'r', hr:'none', auth:'none', settings:'none' } },
-  { name:'열람전용',  perms:{ contracts:'r',  invoices:'r',  bank:'none',match:'none',savings:'none',dash:'r', hr:'none', auth:'none', settings:'none' } },
+  { name:'관리자',    perms:{ contracts:'rw', invoices:'rw', bank:'rw', match:'rw', savings:'rw', dash:'rw', hr:'rw', auth:'rw', settings:'rw', equip:'rw' } },
+  { name:'계약담당',  perms:{ contracts:'rw', invoices:'rw', bank:'r',  match:'r',  savings:'none', dash:'r', hr:'none', auth:'none', settings:'none', equip:'r' } },
+  { name:'자금담당',  perms:{ contracts:'r',  invoices:'r',  bank:'rw', match:'rw', savings:'rw',  dash:'r', hr:'none', auth:'none', settings:'none', equip:'none' } },
+  { name:'일반직원',  perms:{ contracts:'r',  invoices:'r',  bank:'none',match:'none',savings:'none',dash:'r', hr:'none', auth:'none', settings:'none', equip:'r' } },
+  { name:'열람전용',  perms:{ contracts:'r',  invoices:'r',  bank:'none',match:'none',savings:'none',dash:'r', hr:'none', auth:'none', settings:'none', equip:'r' } },
 ];
 
 function authInit(){
@@ -2953,8 +3377,49 @@ Views.auth = function(){
       <span class="sp"></span>
     </div>
     <div id="auth-content" style="margin-top:4px"></div>`;
-  authTab==='role' ? _renderAuthRole() : _renderAuthUser();
+  if(authTab==='role') _renderAuthRole();
+  else _renderAuthUser();
 };
+
+/* ── 기기 승인 대기 목록 ── */
+async function _renderPendingDevices(){
+  const box = document.getElementById('auth-content');
+  if(!box) return;
+  box.innerHTML = '<div class="card"><div class="bd"><div class="empty">로딩중...</div></div></div>';
+  const res = await supa.from('pending_devices').select('*').order('requested_at',{ascending:false});
+  const list = res.data || [];
+  if(!list.length){
+    box.innerHTML = '<div class="card"><div class="bd"><div class="empty"><b>승인 대기중인 요청이 없습니다</b></div></div></div>';
+    return;
+  }
+  const rows = list.map(p=>{
+    const statusTag = p.status==='승인' ? '<span class="tag t2">승인됨</span>'
+      : p.status==='거절' ? '<span class="tag gray">거절됨</span>'
+      : '<span class="tag t4">대기중</span>';
+    const dt = p.requested_at ? new Date(p.requested_at).toLocaleString('ko-KR') : '';
+    const actions = p.status==='대기'
+      ? `<button class="btn sm pri" onclick="Auth.approveDevice('${p.id}')">승인</button>
+         <button class="btn sm dgr" onclick="Auth.rejectDevice('${p.id}')">거절</button>`
+      : `<button class="btn sm" onclick="Auth.deletePending('${p.id}')">삭제</button>`;
+    return `<tr>
+      <td>${esc(p.name)}</td>
+      <td style="font-size:11px;color:var(--ink3)">${esc(p.device_info||'')}</td>
+      <td style="font-size:12px">${dt}</td>
+      <td class="ctr">${statusTag}</td>
+      <td class="ctr">${actions}</td>
+    </tr>`;
+  }).join('');
+  box.innerHTML = `
+    <div class="card">
+      <div class="hd"><h2>기기 승인 대기 목록 <span style="font-size:11px;color:var(--ink3);font-weight:500">새 기기에서 PIN을 설정하면 여기에 표시됩니다</span></h2></div>
+      <div class="bd np">
+        <table class="grid">
+          <thead><tr><th>이름</th><th>기기정보</th><th>요청일시</th><th class="ctr">상태</th><th class="ctr">처리</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
 
 /* ── 역할별 권한 설정 ── */
 function _renderAuthRole(){
@@ -3030,8 +3495,9 @@ function _renderAuthUser(){
         </select>
       </td>
       <td class="ctr">${cur?`<span class="tag ${cur==='관리자'?'t1':cur==='열람전용'?'gray':'t4'}">${esc(cur)}</span>`:'<span style="color:var(--ink3);font-size:12px">미배정</span>'}</td>
+      <td class="ctr"><button class="btn sm dgr" onclick="Auth.resetPin('${e.id}','${esc(e.name)}')">PIN 초기화</button></td>
     </tr>`;
-  }).join('') || `<tr><td colspan="5"><div class="empty"><b>재직 중인 직원이 없습니다</b>인사관리에서 직원을 먼저 등록하세요</div></td></tr>`;
+  }).join('') || `<tr><td colspan="6"><div class="empty"><b>재직 중인 직원이 없습니다</b>인사관리에서 직원을 먼저 등록하세요</div></td></tr>`;
 
   // 역할별 인원 요약
   const summary = roles.map(r=>{
@@ -3049,13 +3515,24 @@ function _renderAuthUser(){
     </div>
     <div class="bd np tbl-wrap">
       <table class="grid">
-        <thead><tr><th>이름</th><th>부서</th><th>직급</th><th class="ctr" style="width:160px">역할 선택</th><th class="ctr" style="width:100px">현재 역할</th></tr></thead>
+        <thead><tr><th>이름</th><th>부서</th><th>직급</th><th class="ctr" style="width:160px">역할 선택</th><th class="ctr" style="width:100px">현재 역할</th><th class="ctr" style="width:100px">PIN 관리</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div></div>`;
 }
 
 const Auth = {
+  // 직원 PIN 초기화: 해당 직원이 이 기기/타 기기에 등록한 PIN 정보를 지우고,
+  // 직원 본인이 다시 "이름+PIN"으로 등록할 수 있는 상태로 되돌림.
+  // (PIN은 각 기기 localStorage에 저장되므로, 관리자가 원격으로 직접 지울 수는 없음.
+  //  대신 staff_profiles에 초기화 플래그를 남겨, 해당 직원이 로그인 시도 시
+  //  자동으로 등록화면으로 안내되도록 처리)
+  async resetPin(empId, empName){
+    if(!confirm('['+empName+']님의 PIN을 초기화하시겠습니까?\n초기화 후 본인이 다시 이름+PIN으로 등록해야 합니다.')) return;
+    const {error} = await supa.from('staff_profiles').update({pin_reset_at:new Date().toISOString()}).eq('name', empName);
+    if(error){ toast('초기화 실패: '+error.message); return; }
+    toast('✅ '+empName+'님의 PIN이 초기화되었습니다. 본인 기기에서 다시 등록해주세요.');
+  },
   setPerm(role, menu, val){
     if(!State.auth.roles[role]) return;
     State.auth.roles[role].perms[menu] = val;
@@ -3270,7 +3747,7 @@ const Ediag = {
     ]);
   },
 
-  delTeam(contractId){
+  async delTeam(contractId){
     const c = contractById(contractId);
     const d = ediagByContract(contractId);
     if(!d){ toast('삭제할 팀 구성이 없습니다'); return; }
@@ -3281,14 +3758,23 @@ ${teamInfo}
 
 팀 구성을 삭제할까요?
 (보고서 파일도 함께 삭제됩니다)`)) return;
+    const delId = d.id;
     State.ediag = State.ediag.filter(x=>x.contractId!==contractId);
-    State.saveAll();
+    toast('삭제 중...');
+    try{
+      // Supabase에서도 명시적으로 삭제 (다른 사용자 화면에 즉시 반영되도록)
+      await supa.from('ediag').delete().eq('id', delId);
+      await State.saveAll();
+      toast('✅ 팀 구성이 삭제됐습니다');
+    }catch(e){
+      toast('❌ 삭제 실패: '+e.message);
+      return;
+    }
     UI.closeModal();
     if(location.hash==='#ediagmail') Views.ediagmail();
     else _renderEdiag();
-    toast('팀 구성이 삭제됐습니다');
   },
-  saveTeam(contractId){
+  async saveTeam(contractId){
     const g = id=>document.getElementById(id);
     const leaderVal = g('ediag-leader')?.value||'';
     if(!leaderVal){ toast('팀장을 선택하세요'); return; }
@@ -3315,11 +3801,18 @@ ${teamInfo}
     const exist = State.ediag.findIndex(d=>d.contractId===contractId);
     if(exist>=0){ State.ediag[exist] = {...State.ediag[exist], ...data}; }  // files 보존
     else { data.id = DB.uid(); data.files = {}; State.ediag.push(data); }
-    State.saveAll(); UI.closeModal();
+    toast('저장 중...');
+    try{
+      await State.saveAll();
+      toast(`✅ 팀 구성 저장 완료 · 팀장 ${lName} + 팀원 ${members.length}명`);
+    }catch(e){
+      toast('❌ 저장 실패: '+e.message);
+      return;
+    }
+    UI.closeModal();
     // 현재 화면에 맞게 리렌더
     if(location.hash==='#ediagmail') Views.ediagmail();
     else _renderEdiag();
-    toast(`팀 구성 저장 완료 · 팀장 ${lName} + 팀원 ${members.length}명`);
   }
 };
 </script>
@@ -3628,7 +4121,7 @@ function _ediagOverlaps(s1, e1, s2, e2){
 
 window.EdiagMail = {
   /* 일정 등록 모달 */
-  editSchedule(contractId){
+  editSchedule(contractId, tab){
     var c = contractById(contractId);
     var d = State.ediag.find(function(x){ return x.contractId===contractId; });
     if(!d){ toast('팀 구성을 먼저 완료해주세요'); return; }
@@ -3637,58 +4130,45 @@ window.EdiagMail = {
     var members = [];
     if(d.leader && d.leader.hrId) members.push({hrId:d.leader.hrId, name:d.leader.name, role:'팀장'});
     (d.members||[]).forEach(function(m){ members.push({hrId:m.hrId, name:m.name, role:'팀원'}); });
+    if(!members.length){ toast('팀 구성원이 없습니다'); return; }
 
-    // 구성원별 기존 일정
+    EdiagMail._calTab = tab || EdiagMail._calTab || 'site'; // 'site'=현장진단, 'report'=보고서작성
+    EdiagMail._calContractId = contractId;
+    EdiagMail._calYear  = EdiagMail._calYear  || new Date().getFullYear();
+    EdiagMail._calMonth = EdiagMail._calMonth || (new Date().getMonth()+1);
+
     var ms = d.memberSchedules || {};
+    // 기존 데이터를 날짜배열 구조로 정규화 (이전 startDate~endDate 방식과의 하위호환)
+    members.forEach(function(m){
+      if(!ms[m.hrId]) ms[m.hrId] = {};
+      if(!ms[m.hrId].siteDates)   ms[m.hrId].siteDates   = ms[m.hrId].siteDates   || [];
+      if(!ms[m.hrId].reportDates) ms[m.hrId].reportDates = ms[m.hrId].reportDates || [];
+    });
+    d.memberSchedules = ms;
 
-    // 구성원별 날짜 행
-    var memberRowsHtml = members.map(function(m){
-      var mS = ms[m.hrId] ? (ms[m.hrId].startDate||d.startDate||'') : (d.startDate||'');
-      var mE = ms[m.hrId] ? (ms[m.hrId].endDate||d.endDate||'')     : (d.endDate||'');
-      var roleTag = m.role==='팀장'
-        ? '<span style="background:#e8f5e9;color:#2e7d32;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700">팀장</span>'
-        : '<span style="background:#e3f2fd;color:#1565c0;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700">팀원</span>';
-      return '<tr>'
-        + '<td style="white-space:nowrap">' + roleTag + ' <b>' + esc(m.name) + '</b></td>'
-        + '<td><input type="date" id="ms-s-' + m.hrId + '" value="' + mS + '" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:13px"></td>'
-        + '<td><input type="date" id="ms-e-' + m.hrId + '" value="' + mE + '" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:13px"></td>'
-        + '</tr>';
-    }).join('');
+    var ROLE_COLOR = { '팀장':'#2e7d32', '팀원':'#1565c0' };
 
-    // 모달 body
     var modalBody = ''
-      + '<div style="padding:10px 14px;background:var(--brand-soft);border-radius:8px;font-size:13px;margin-bottom:14px">'
+      + '<div style="padding:10px 14px;background:var(--brand-soft);border-radius:8px;font-size:13px;margin-bottom:12px">'
       + '<b>' + esc(c?c.no:'') + ' · ' + esc(c?c.name:'') + ' · ' + esc(c?c.client:'') + '</b>'
       + '<span style="float:right;color:var(--ink2)">' + esc(c&&c.grade?c.grade+' 등급':'') + '</span>'
       + '</div>'
 
-      // 팀 전체 일정
-      + '<div style="border:2px solid var(--brand);border-radius:10px;padding:14px;margin-bottom:14px">'
-      + '<div style="font-size:13px;font-weight:800;color:var(--brand);margin-bottom:10px">📅 팀 전체 일정'
-      + '<span style="font-size:11px;color:var(--ink3);font-weight:400;margin-left:8px">입력하면 구성원 일정에 자동 반영</span></div>'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:flex-end">'
-      + '<div><div style="font-size:12px;color:var(--ink2);margin-bottom:4px">시작일</div>'
-      + '<input type="date" id="em-start" value="' + esc(d.startDate||'') + '" onchange="window._emSyncAll()" style="width:100%;border:1.5px solid var(--brand);border-radius:7px;padding:6px 8px;font-size:13px"></div>'
-      + '<div><div style="font-size:12px;color:var(--ink2);margin-bottom:4px">종료일</div>'
-      + '<input type="date" id="em-end" value="' + esc(d.endDate||'') + '" onchange="window._emSyncAll()" style="width:100%;border:1.5px solid var(--brand);border-radius:7px;padding:6px 8px;font-size:13px"></div>'
-      + '<button onclick="window._emSyncAll()" style="background:var(--brand);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:13px;cursor:pointer;white-space:nowrap">↓ 전체 적용</button>'
-      + '</div></div>'
+      // 범례 (한 달력에서 현장진단·보고서작성 모두 한눈에 확인/체크)
+      + '<div style="display:flex;align-items:center;gap:16px;padding:9px 12px;background:#f7f9f8;border-radius:8px;margin-bottom:10px;font-size:12.5px;font-weight:600">'
+      + '<span style="display:flex;align-items:center;gap:5px;color:#d32f2f"><input type="checkbox" checked disabled style="width:12px;height:12px;accent-color:#d32f2f">📍 현장진단</span>'
+      + '<span style="display:flex;align-items:center;gap:5px;color:#1565c0"><input type="checkbox" checked disabled style="width:12px;height:12px;accent-color:#1565c0">📝 보고서작성</span>'
+      + '<span style="color:var(--ink3);font-size:11.5px;font-weight:400">— 두 일정은 서로 독립적으로 체크됩니다</span>'
+      + '</div>'
 
-      // 구성원별 일정
-      + '<div style="border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px">'
-      + '<div style="background:#f7f9f8;padding:9px 14px;font-size:13px;font-weight:700;border-bottom:1px solid var(--line)">👥 구성원별 일정</div>'
-      + '<table style="width:100%;border-collapse:collapse">'
-      + '<thead><tr style="background:#f7f9f8">'
-      + '<th style="padding:7px 12px;text-align:left;font-size:12px;width:110px;border-bottom:1px solid var(--line)">구성원</th>'
-      + '<th style="padding:7px 12px;text-align:left;font-size:12px;border-bottom:1px solid var(--line)">시작일</th>'
-      + '<th style="padding:7px 12px;text-align:left;font-size:12px;border-bottom:1px solid var(--line)">종료일</th>'
-      + '</tr></thead>'
-      + '<tbody>' + memberRowsHtml + '</tbody>'
-      + '</table></div>'
+      + '<div id="cal-container"></div>'
+
+      // 구성원별 투입일수 요약
+      + '<div id="member-summary" style="margin-top:10px"></div>'
 
       // 비고
-      + '<div style="margin-bottom:4px;font-size:12px;color:var(--ink2)">비고</div>'
-      + '<textarea id="em-memo" rows="2" style="width:100%;border:1px solid var(--line);border-radius:7px;padding:8px;font-size:13px;resize:vertical">' + esc(d.memo||'') + '</textarea>'
+      + '<div style="margin-top:10px"><div style="font-size:12px;color:var(--ink2);margin-bottom:4px">비고</div>'
+      + '<textarea id="em-memo" rows="2" style="width:100%;border:1px solid var(--line);border-radius:7px;padding:8px;font-size:13px;resize:vertical">' + esc(d.memo||'') + '</textarea></div>'
 
       // 버튼
       + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">'
@@ -3697,29 +4177,160 @@ window.EdiagMail = {
       + '<button onclick="EdiagMail.saveSchedule(\'' + contractId + '\')" style="padding:7px 18px;border:1.5px solid #0a4a42;border-radius:7px;background:#0e5e54;color:#fff;font-weight:800;cursor:pointer;font-size:13px">💾 일정 저장</button>'
       + '</div>';
 
-    // 전체 적용 함수 등록
-    window._emSyncAll = function(){
-      var s = (document.getElementById('em-start')||{}).value||'';
-      var e = (document.getElementById('em-end')||{}).value||'';
-      document.querySelectorAll('[id^="ms-s-"]').forEach(function(el){ if(s) el.value=s; });
-      document.querySelectorAll('[id^="ms-e-"]').forEach(function(el){ if(e) el.value=e; });
-    };
-
     UI.openModal('일정 등록 — ' + esc(c?c.no:''), modalBody, []);
+    EdiagMail._renderCalendar();
+  },
+
+  _switchCalTab(tab){
+    EdiagMail._calTab = tab;
+    EdiagMail.editSchedule(EdiagMail._calContractId, tab);
+  },
+
+  // 달력 렌더링 (해당 탭의 일정만 표시, 날짜칸 안에 구성원 체크박스)
+  _renderCalendar(){
+    var contractId = EdiagMail._calContractId;
+    var d = State.ediag.find(function(x){ return x.contractId===contractId; });
+    if(!d) return;
+    var members = [];
+    if(d.leader && d.leader.hrId) members.push({hrId:d.leader.hrId, name:d.leader.name, role:'팀장'});
+    (d.members||[]).forEach(function(m){ members.push({hrId:m.hrId, name:m.name, role:'팀원'}); });
+    var ms = d.memberSchedules || {};
+    var color = '#0e5e54';
+
+    var y = EdiagMail._calYear, m = EdiagMail._calMonth;
+    var firstDay = new Date(y, m-1, 1);
+    var lastDate = new Date(y, m, 0).getDate();
+    var startWeekday = firstDay.getDay(); // 0=일
+
+    function pad(n){ return n<10 ? '0'+n : ''+n; }
+    function dateStr(day){ return y+'-'+pad(m)+'-'+pad(day); }
+
+    var weekdayRow = ['일','월','화','수','목','금','토'].map(function(w,i){
+      var c = i===0 ? '#d32f2f' : (i===6 ? '#1565c0' : 'var(--ink2)');
+      return '<div style="text-align:center;font-size:11px;font-weight:700;color:'+c+';padding:4px 0">'+w+'</div>';
+    }).join('');
+
+    var cells = '';
+    for(var i=0;i<startWeekday;i++) cells += '<div></div>';
+    for(var day=1; day<=lastDate; day++){
+      var ds = dateStr(day);
+      var siteAllChecked = members.length>0 && members.every(function(mem){
+        var arr = (ms[mem.hrId] && ms[mem.hrId].siteDates) || [];
+        return arr.indexOf(ds) !== -1;
+      });
+      var reportAllChecked = members.length>0 && members.every(function(mem){
+        var arr = (ms[mem.hrId] && ms[mem.hrId].reportDates) || [];
+        return arr.indexOf(ds) !== -1;
+      });
+      // 각 구성원 줄에 현장진단(빨강)·보고서작성(파랑) 체크박스를 함께 표시 (탭 전환과 무관하게 항상 둘 다 보임)
+      var checks = members.map(function(mem){
+        var siteArr = (ms[mem.hrId] && ms[mem.hrId].siteDates) || [];
+        var reportArr = (ms[mem.hrId] && ms[mem.hrId].reportDates) || [];
+        var siteChecked = siteArr.indexOf(ds) !== -1;
+        var reportChecked = reportArr.indexOf(ds) !== -1;
+        return '<div style="display:flex;align-items:center;gap:4px;font-size:9.5px;white-space:nowrap;overflow:hidden;margin-bottom:1px">'
+          + '<input type="checkbox" class="cal-chk-site-'+ds+'" data-field="site" data-hr="'+mem.hrId+'" data-date="'+ds+'" onchange="EdiagMail._toggleDate(this)" '+(siteChecked?'checked':'')+' style="width:12px;height:12px;cursor:pointer;flex:none;accent-color:#d32f2f">'
+          + '<input type="checkbox" class="cal-chk-report-'+ds+'" data-field="report" data-hr="'+mem.hrId+'" data-date="'+ds+'" onchange="EdiagMail._toggleDate(this)" '+(reportChecked?'checked':'')+' style="width:12px;height:12px;cursor:pointer;flex:none;accent-color:#1565c0">'
+          + '<span style="overflow:hidden;text-overflow:ellipsis;color:var(--ink)">'+esc(mem.name)+'</span></div>';
+      }).join('');
+      var allLabel = '<div style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--ink3);cursor:pointer;border-bottom:1px dashed var(--line2);padding-bottom:2px;margin-bottom:2px;font-weight:700">'
+        + '<input type="checkbox" data-field="site" data-date="'+ds+'" onchange="EdiagMail._toggleAllDate(this)" '+(siteAllChecked?'checked':'')+' style="width:12px;height:12px;cursor:pointer;flex:none;accent-color:#d32f2f">'
+        + '<input type="checkbox" data-field="report" data-date="'+ds+'" onchange="EdiagMail._toggleAllDate(this)" '+(reportAllChecked?'checked':'')+' style="width:12px;height:12px;cursor:pointer;flex:none;accent-color:#1565c0">'
+        + '<span>전체</span></div>';
+      cells += '<div style="border:1px solid var(--line2);border-radius:6px;padding:4px;min-height:'+(20+members.length*16)+'px;background:#fff">'
+        + '<div style="font-size:11px;font-weight:700;color:var(--ink2);margin-bottom:3px">'+day+'</div>'
+        + allLabel
+        + checks
+        + '</div>';
+    }
+
+    var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+      + '<button onclick="EdiagMail._calNav(-1)" style="border:1px solid var(--line);border-radius:6px;background:#fff;padding:4px 10px;cursor:pointer;font-size:13px">◀</button>'
+      + '<div style="font-weight:800;font-size:14px;color:'+color+'">'+y+'년 '+m+'월</div>'
+      + '<button onclick="EdiagMail._calNav(1)" style="border:1px solid var(--line);border-radius:6px;background:#fff;padding:4px 10px;cursor:pointer;font-size:13px">▶</button>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:2px">'+weekdayRow+'</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;max-height:360px;overflow-y:auto">'+cells+'</div>';
+
+    document.getElementById('cal-container').innerHTML = html;
+    EdiagMail._renderMemberSummary();
+  },
+
+  _calNav(delta){
+    EdiagMail._calMonth += delta;
+    if(EdiagMail._calMonth > 12){ EdiagMail._calMonth = 1; EdiagMail._calYear++; }
+    if(EdiagMail._calMonth < 1){ EdiagMail._calMonth = 12; EdiagMail._calYear--; }
+    EdiagMail._renderCalendar();
+  },
+
+  // 체크박스 토글: 메모리(d.memberSchedules)에 날짜 추가/제거
+  _toggleDate(el){
+    var hrId = el.getAttribute('data-hr');
+    var ds   = el.getAttribute('data-date');
+    var clickedField = el.getAttribute('data-field'); // 'site' 또는 'report'
+    var d = State.ediag.find(function(x){ return x.contractId===EdiagMail._calContractId; });
+    if(!d) return;
+    var ms = d.memberSchedules || (d.memberSchedules = {});
+    if(!ms[hrId]) ms[hrId] = {siteDates:[], reportDates:[]};
+    var field = clickedField==='site' ? 'siteDates' : 'reportDates';
+    var arr = ms[hrId][field] || (ms[hrId][field] = []);
+    var idx = arr.indexOf(ds);
+    // 현장진단·보고서작성은 완전히 독립적으로 체크/해제 (서로 영향 없음)
+    if(el.checked){
+      if(idx===-1) arr.push(ds);
+    } else {
+      if(idx!==-1) arr.splice(idx,1);
+    }
+    EdiagMail._renderMemberSummary();
+  },
+
+  // 날짜별 "전체" 체크박스: 그 날의 모든 구성원 체크박스를 일괄 토글 (상호배타 동일 적용)
+  _toggleAllDate(allEl){
+    var ds = allEl.getAttribute('data-date');
+    var field = allEl.getAttribute('data-field'); // 'site' 또는 'report'
+    var checked = allEl.checked;
+    var checkboxes = document.querySelectorAll('.cal-chk-'+field+'-'+ds);
+    checkboxes.forEach(function(cb){
+      if(cb.checked !== checked){
+        cb.checked = checked;
+        EdiagMail._toggleDate(cb);
+      }
+    });
+  },
+
+  // 구성원별 투입일수 요약 (현재 탭 기준, 이름 옆에 (n일) 표시)
+  _renderMemberSummary(){
+    var d = State.ediag.find(function(x){ return x.contractId===EdiagMail._calContractId; });
+    if(!d) return;
+    var members = [];
+    if(d.leader && d.leader.hrId) members.push({hrId:d.leader.hrId, name:d.leader.name, role:'팀장'});
+    (d.members||[]).forEach(function(m){ members.push({hrId:m.hrId, name:m.name, role:'팀원'}); });
+    var ms = d.memberSchedules || {};
+
+    var rows = members.map(function(mem){
+      var siteArr = (ms[mem.hrId] && ms[mem.hrId].siteDates) || [];
+      var reportArr = (ms[mem.hrId] && ms[mem.hrId].reportDates) || [];
+      var roleTag = mem.role==='팀장'
+        ? '<span style="background:#e8f5e9;color:#2e7d32;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700">팀장</span>'
+        : '<span style="background:#e3f2fd;color:#1565c0;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700">팀원</span>';
+      return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:12.5px">'
+        + roleTag + ' <b>'+esc(mem.name)+'</b>'
+        + ' — <span style="color:#d32f2f">📍현장진단 <b>('+siteArr.length+'일)</b></span>'
+        + ' · <span style="color:#1565c0">📝보고서작성 <b>('+reportArr.length+'일)</b></span>'
+        + '</div>';
+    }).join('');
+    document.getElementById('member-summary').innerHTML =
+      '<div style="border-top:1px solid var(--line2);padding-top:8px">'+rows+'</div>';
   },
 
 
-  saveSchedule(contractId){
+
+  async saveSchedule(contractId){
     const c  = contractById(contractId);
     const me = State.ediag.find(e=>e.contractId===contractId);
     if(!me){ toast('팀 구성이 필요합니다'); return; }
-
-    const s1 = (document.getElementById('em-start')?.value||'').trim();
-    const e1 = (document.getElementById('em-end')?.value||'').trim();
     const memo = (document.getElementById('em-memo')?.value||'').trim();
-
-    if(!s1 && !e1){ toast('시작일 또는 종료일을 입력해주세요'); return; }
-    if(s1 && e1 && s1 > e1){ toast('시작일이 종료일보다 늦을 수 없습니다'); return; }
+    me.memo = memo;
 
     // 팀원 ID 수집 (팀장 포함)
     const myIds = [];
@@ -3731,41 +4342,29 @@ window.EdiagMail = {
     const nameMap = {};
     (State.hr||[]).forEach(function(h){ if(h && h.id) nameMap[h.id] = h.name||h.id; });
 
-    // 겹침 판별: 두 구간 [s1,e1], [s2,e2]가 하루라도 겹치면 true
-    // 단일 날짜면 같은 날 시작=종료로 취급
-    function dateOverlap(s1,e1,s2,e2){
-      var a = s1||e1, b = e1||s1, c2 = s2||e2, d2 = e2||s2;
-      if(!a || !c2) return false;
-      return a <= d2 && c2 <= b;
-    }
+    const ms = me.memberSchedules || {};
 
-    // 다른 계약과 비교 (구성원별 일정 기준)
+    // 겹침 검사: 날짜 배열 기준 (현장진단/보고서작성 모두 검사)
     var conflicts = [];
-    // 현재 모달에서 입력한 구성원별 일정 수집
-    var mySchedules = {};
-    myIds.forEach(function(hrId){
-      var mS = (document.getElementById('ms-s-'+hrId)||{}).value || s1;
-      var mE = (document.getElementById('ms-e-'+hrId)||{}).value || e1;
-      mySchedules[hrId] = {s: mS||s1, e: mE||e1};
-    });
     (State.ediag||[]).forEach(function(other){
       if(other.contractId === contractId) return;
       var otherIds = [];
       if(other.leader && other.leader.hrId) otherIds.push(other.leader.hrId);
       (other.members||[]).forEach(function(m){ if(m && m.hrId) otherIds.push(m.hrId); });
       var otherMs = other.memberSchedules || {};
+      var oc = contractById(other.contractId);
       myIds.forEach(function(myId){
         if(otherIds.indexOf(myId) === -1) return;
-        var mySch = mySchedules[myId] || {s:s1, e:e1};
-        var oSch  = otherMs[myId]
-          ? {s: otherMs[myId].startDate||other.startDate||'', e: otherMs[myId].endDate||other.endDate||''}
-          : {s: other.startDate||'', e: other.endDate||''};
-        if(!oSch.s && !oSch.e) return;
-        if(!dateOverlap(mySch.s, mySch.e, oSch.s, oSch.e)) return;
-        var oc = contractById(other.contractId);
-        var period = oSch.s + (oSch.e?' ~ '+oSch.e:'');
-        conflicts.push('[' + (oc?oc.no:'?') + '] ' + (oc?oc.name:'?')
-          + ' / ' + (nameMap[myId]||myId) + ' 일정 겹침 (' + period + ')');
+        ['siteDates','reportDates'].forEach(function(field){
+          var myArr = (ms[myId] && ms[myId][field]) || [];
+          var otherArr = (otherMs[myId] && otherMs[myId][field]) || [];
+          var overlap = myArr.filter(function(d){ return otherArr.indexOf(d) !== -1; });
+          if(overlap.length){
+            var label = field==='siteDates' ? '현장진단' : '보고서작성';
+            conflicts.push('[' + (oc?oc.no:'?') + '] ' + (oc?oc.name:'?')
+              + ' / ' + (nameMap[myId]||myId) + ' ' + label + ' 일정 겹침 (' + overlap.join(', ') + ')');
+          }
+        });
       });
     });
 
@@ -3774,27 +4373,29 @@ window.EdiagMail = {
       return;
     }
 
-    // 구성원별 일정 저장
-    var allMembers2 = [];
-    if(me.leader && me.leader.hrId) allMembers2.push(me.leader.hrId);
-    (me.members||[]).forEach(function(m){ if(m&&m.hrId) allMembers2.push(m.hrId); });
-    var newMs = {};
-    allMembers2.forEach(function(hrId){
-      var mS = (document.getElementById('ms-s-'+hrId)||{}).value||'';
-      var mE = (document.getElementById('ms-e-'+hrId)||{}).value||'';
-      newMs[hrId] = {startDate:mS, endDate:mE};
+    // 전체 기간(startDate/endDate)을 모든 구성원의 날짜 중 최소/최대로 자동 계산 (목록 화면 표시용)
+    var allDates = [];
+    myIds.forEach(function(hrId){
+      var s = ms[hrId] || {};
+      allDates = allDates.concat(s.siteDates||[], s.reportDates||[]);
     });
-    me.startDate = s1;
-    me.endDate   = e1;
-    me.memo      = memo;
-    me.memberSchedules = newMs;
-    State.saveAll();
+    allDates.sort();
+    me.startDate = allDates.length ? allDates[0] : '';
+    me.endDate   = allDates.length ? allDates[allDates.length-1] : '';
+
+    toast('저장 중...');
+    try{
+      await State.saveAll();
+      toast('✅ [' + (c?c.no:'') + '] 진단일정이 저장되었습니다');
+    }catch(e){
+      toast('❌ 저장 실패: '+e.message);
+      return;
+    }
     UI.closeModal();
     Views.ediagmail();
-    toast('[' + (c?c.no:'') + '] 진단일정이 저장되었습니다');
   },
 
-  /* 메일 발송 (mailto) */
+    /* 메일 발송 (mailto) */
   exportExcel(contractId){
     // 이 업체의 팀구성 + 일정 엑셀 다운로드
     const c = contractById(contractId);
@@ -3818,8 +4419,16 @@ window.EdiagMail = {
       var ctotal = (Number(c.supply)||0)+(Number(c.vat)||0);
       var ms = d.memberSchedules||{};
 
+      function fmtDates(arr){
+        var sorted = (arr||[]).slice().sort();
+        if(!sorted.length) return '';
+        var first = sorted[0], last = sorted[sorted.length-1];
+        return first===last ? first : (first + ' ~ ' + last);
+      }
+
       // 팀장 행
       var leaderHr = State.hr.find(function(h){ return h.id===d.leader.hrId; });
+      var leaderMs = ms[d.leader.hrId] || {};
       rows.push({
         '계약번호': c.no||'',
         '업체명':   c.client||'',
@@ -3831,16 +4440,19 @@ window.EdiagMail = {
         '직급':     leaderHr ? (leaderHr.rank||'') : '',
         '핸드폰':   leaderHr ? (leaderHr.phone||'') : '',
         '이메일':   leaderHr ? (leaderHr.email||'') : '',
-        '팀 시작일': d.startDate||'',
-        '팀 종료일': d.endDate||'',
-        '개인 시작일': ms[d.leader.hrId] ? (ms[d.leader.hrId].startDate||'') : (d.startDate||''),
-        '개인 종료일': ms[d.leader.hrId] ? (ms[d.leader.hrId].endDate||'')   : (d.endDate||''),
+        '진단대상_담당자성명': c.siteContactName||'',
+        '진단대상_담당자연락처': c.siteContactPhone||'',
+        '진단대상_담당자이메일': c.siteContactEmail||'',
+        '진단대상_사업장주소': c.siteAddress||'',
+        '현장진단일정(일수)': leaderMs.siteDates&&leaderMs.siteDates.length ? (fmtDates(leaderMs.siteDates) + ' (' + leaderMs.siteDates.length + '일)') : '',
+        '보고서작성일정(일수)': leaderMs.reportDates&&leaderMs.reportDates.length ? (fmtDates(leaderMs.reportDates) + ' (' + leaderMs.reportDates.length + '일)') : '',
         '비고':     d.memo||''
       });
 
       // 팀원 행
       (d.members||[]).forEach(function(m){
         var mHr = State.hr.find(function(h){ return h.id===m.hrId; });
+        var mMs = ms[m.hrId] || {};
         rows.push({
           '계약번호': c.no||'',
           '업체명':   c.client||'',
@@ -3852,10 +4464,12 @@ window.EdiagMail = {
           '직급':     mHr ? (mHr.rank||'') : '',
           '핸드폰':   mHr ? (mHr.phone||'') : '',
           '이메일':   mHr ? (mHr.email||'') : '',
-          '팀 시작일': d.startDate||'',
-          '팀 종료일': d.endDate||'',
-          '개인 시작일': ms[m.hrId] ? (ms[m.hrId].startDate||'') : (d.startDate||''),
-          '개인 종료일': ms[m.hrId] ? (ms[m.hrId].endDate||'')   : (d.endDate||''),
+          '진단대상_담당자성명': c.siteContactName||'',
+          '진단대상_담당자연락처': c.siteContactPhone||'',
+          '진단대상_담당자이메일': c.siteContactEmail||'',
+          '진단대상_사업장주소': c.siteAddress||'',
+          '현장진단일정(일수)': mMs.siteDates&&mMs.siteDates.length ? (fmtDates(mMs.siteDates) + ' (' + mMs.siteDates.length + '일)') : '',
+          '보고서작성일정(일수)': mMs.reportDates&&mMs.reportDates.length ? (fmtDates(mMs.reportDates) + ' (' + mMs.reportDates.length + '일)') : '',
           '비고':     d.memo||''
         });
       });
@@ -3868,7 +4482,8 @@ window.EdiagMail = {
     ws['!cols'] = [
       {wch:14},{wch:20},{wch:20},{wch:6},{wch:14},
       {wch:6},{wch:10},{wch:8},{wch:14},{wch:24},
-      {wch:12},{wch:12},{wch:12},{wch:12},{wch:20}
+      {wch:10},{wch:14},{wch:22},{wch:30},
+      {wch:40},{wch:40},{wch:20}
     ];
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '진단일정');
@@ -3909,6 +4524,530 @@ window.EdiagMail = {
   }catch(e){}
   setInterval(function(){ Updater.checkAutoReload(); }, 5*60*1000);
 })();
+</script>
+</body>
+<script>
+/* =====================================================
+   진단장비현황 (equip)
+   State.equip = [{id, equipName, equipNo, sn, calibrationHistory, purchaseYear, failureHistory, memo}]
+===================================================== */
+let equipFilter = { q:'' };
+
+let equipTab = 'list'; // 'list'=장비목록, 'byPerson'=개인별 보유현황
+Views.equip = function(){
+  document.getElementById('content').innerHTML = `
+    <div class="toolbar sticky-toolbar">
+      <button class="btn ${equipTab==='list'?'pri':''}" onclick="equipTab='list';Views.equip()">📋 장비목록</button>
+      <button class="btn ${equipTab==='byPerson'?'pri':''}" onclick="equipTab='byPerson';Views.equip()">👤 개인별 보유현황</button>
+      <span class="sp"></span>
+      <div id="equip-toolbar-extra" style="display:flex;gap:8px;align-items:center"></div>
+    </div>
+    <div id="equip-list" style="margin-top:4px"></div>`;
+  if(equipTab==='list') _renderEquip();
+  else _renderEquipByPerson();
+};
+
+/* 한글 IME 대응 검색 */
+const _equipIme = { composing:false };
+document.addEventListener('compositionstart', e=>{ if(e.target.id==='equip-search') _equipIme.composing=true; });
+document.addEventListener('compositionend',   e=>{ if(e.target.id==='equip-search'){ _equipIme.composing=false; equipFilter.q=e.target.value; _renderEquip(); }});
+function equipSearchInput(e){ if(_equipIme.composing) return; equipFilter.q=e.target.value; _renderEquip(); }
+
+function _equipRows(){
+  return (State.equip||[]).filter(eq=>{
+    if(!equipFilter.q) return true;
+    const q = equipFilter.q.toLowerCase();
+    return ((eq.equipName||'')+(eq.equipNo||'')+(eq.sn||'')).toLowerCase().includes(q);
+  }).sort((a,b)=>(a.equipName||'').localeCompare(b.equipName||''));
+}
+
+function _renderEquip(){
+  const extra = document.getElementById('equip-toolbar-extra');
+  if(extra){
+    extra.innerHTML = `
+      <input type="search" id="equip-search" placeholder="장비명·장비번호·SN 검색"
+        value="${esc(equipFilter.q)}" oninput="equipSearchInput(event)" style="width:240px">
+      <span id="equip-summary" style="font-size:12.5px;color:var(--ink2)"></span>
+      <button class="btn" onclick="Equip.template()">업로드 양식</button>
+      <label class="btn">엑셀 일괄등록<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="Equip.importXlsx(this)"></label>
+      <button class="btn" onclick="Equip.exportXlsx()">엑셀 내보내기</button>
+      <button class="btn pri" onclick="Equip.edit()">+ 장비 등록</button>`;
+  }
+  const list = _equipRows();
+  const sm = document.getElementById('equip-summary');
+  if(sm) sm.textContent = `장비 ${list.length}건`;
+
+  if(!list.length){
+    document.getElementById('equip-list').innerHTML =
+      `<div class="card"><div class="empty"><b>등록된 장비가 없습니다</b>우측 상단 [장비 등록] 버튼으로 시작하세요</div></div>`;
+    return;
+  }
+
+  const rows = list.map(eq=>{
+    let holderTag = eq.holderName
+      ? `<span class="tag t2">👤 ${esc(eq.holderName)}</span>`
+      : `<span style="color:var(--ink3);font-size:12px">미배정(보관중)</span>`;
+    if(eq.pendingHandoverId){
+      holderTag += `<br><span class="tag t4" style="margin-top:3px">⏳ ${esc(eq.pendingHolderName)} 인수확인 대기</span>`;
+    }
+    const histCount = (eq.handoverHistory||[]).length;
+    const myName = _supaProfile?.name;
+    const isMyPending = eq.pendingHandoverId && eq.pendingHolderName === myName;
+    const pendingRec = isMyPending ? (eq.handoverHistory||[]).find(r=>r.id===eq.pendingHandoverId) : null;
+    const confirmBtn = isMyPending
+      ? `<button class="btn sm pri" style="background:#e65100;border-color:#e65100" onclick="Equip.confirmReceive('${eq.id}','${pendingRec?pendingRec.id:''}')">✅ 인수확인</button>`
+      : '';
+    return `<tr>
+      <td><b>${esc(eq.equipName||'')}</b></td>
+      <td>${esc(eq.equipNo||'-')}</td>
+      <td>${esc(eq.sn||'-')}</td>
+      <td>${holderTag}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(eq.calibrationHistory||'')}">${esc(eq.calibrationHistory||'-')}</td>
+      <td class="ctr">${esc(eq.purchaseYear||'-')}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(eq.failureHistory||'')}">${esc(eq.failureHistory||'-')}</td>
+      <td class="ctr">
+        ${confirmBtn}
+        <button class="btn sm" style="background:#fff3e0;border-color:#ffcc80;color:#e65100" onclick="Equip.handover('${eq.id}')">🔄 인수인계</button>
+        <button class="btn sm" onclick="Equip.history('${eq.id}')">이력${histCount?'('+histCount+')':''}</button>
+        <button class="btn sm" onclick="Equip.edit('${eq.id}')">수정</button>
+        <button class="btn sm dgr" onclick="Equip.del('${eq.id}')">삭제</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('equip-list').innerHTML = `
+    <div class="card" style="margin:0"><div class="bd np tbl-wrap">
+      <table class="grid">
+        <thead><tr>
+          <th>장비명</th><th style="width:110px">장비번호</th><th style="width:130px">SN</th>
+          <th style="width:120px">현재 보유자</th>
+          <th style="width:150px">검교정이력</th><th class="ctr" style="width:80px">구입년도</th>
+          <th style="width:150px">고장이력</th>
+          <th class="ctr" style="width:230px">관리</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div></div>`;
+}
+
+/* 개인별 보유현황: 직원별로 현재 들고 있는 장비 목록 */
+function _renderEquipByPerson(){
+  const extra = document.getElementById('equip-toolbar-extra');
+  if(extra) extra.innerHTML = `<span style="font-size:12.5px;color:var(--ink2)">직원별로 현재 보유 중인 장비를 모아서 보여줍니다</span>`;
+
+  const list = State.equip||[];
+  const byPerson = {};
+  list.forEach(eq=>{
+    if(!eq.holderName) return;
+    if(!byPerson[eq.holderName]) byPerson[eq.holderName] = [];
+    byPerson[eq.holderName].push(eq);
+  });
+  // 인수확인 대기중인 장비도, 인수받을 사람의 카드에 함께 표시 (확인 버튼 포함)
+  const byPersonPending = {};
+  list.forEach(eq=>{
+    if(!eq.pendingHandoverId || !eq.pendingHolderName) return;
+    if(!byPersonPending[eq.pendingHolderName]) byPersonPending[eq.pendingHolderName] = [];
+    byPersonPending[eq.pendingHolderName].push(eq);
+  });
+  const names = [...new Set([...Object.keys(byPerson), ...Object.keys(byPersonPending)])].sort();
+
+  if(!names.length){
+    document.getElementById('equip-list').innerHTML =
+      `<div class="card"><div class="empty"><b>현재 보유자가 배정된 장비가 없습니다</b>장비목록에서 [인수인계] 버튼으로 보유자를 지정하세요</div></div>`;
+    return;
+  }
+
+  const cards = names.map(name=>{
+    const pendingItems = (byPersonPending[name]||[]).map(eq=>{
+      const rec = (eq.handoverHistory||[]).find(r=>r.id===eq.pendingHandoverId);
+      return `
+      <tr style="background:#fff8e1">
+        <td><b>${esc(eq.equipName||'')}</b></td>
+        <td>${esc(eq.equipNo||'-')}</td>
+        <td>${esc(eq.sn||'-')}</td>
+        <td><span class="tag t4">⏳ 인수확인 대기</span></td>
+        <td class="ctr"><button class="btn sm pri" style="background:#e65100;border-color:#e65100" onclick="Equip.confirmReceive('${eq.id}','${rec?rec.id:''}')">✅ 인수확인</button></td>
+      </tr>`;
+    }).join('');
+    const items = (byPerson[name]||[]).map(eq=>`
+      <tr>
+        <td><b>${esc(eq.equipName||'')}</b></td>
+        <td>${esc(eq.equipNo||'-')}</td>
+        <td>${esc(eq.sn||'-')}</td>
+        <td style="font-size:12px;color:var(--ink3)">${esc(eq.holderSince||'-')} 인수</td>
+        <td class="ctr"><button class="btn sm" style="background:#fff3e0;border-color:#ffcc80;color:#e65100" onclick="Equip.handover('${eq.id}')">🔄 인수인계</button></td>
+      </tr>`).join('');
+    const total = (byPerson[name]||[]).length + (byPersonPending[name]||[]).length;
+    return `<div class="card">
+      <div class="hd"><h2>👤 ${esc(name)} <span style="font-size:12px;color:var(--ink3);font-weight:500">보유 장비 ${total}건</span></h2></div>
+      <div class="bd np"><table class="grid">
+        <thead><tr><th>장비명</th><th style="width:110px">장비번호</th><th style="width:130px">SN</th><th style="width:140px">상태</th><th class="ctr" style="width:120px">관리</th></tr></thead>
+        <tbody>${pendingItems}${items}</tbody>
+      </table></div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('equip-list').innerHTML = cards;
+}
+
+const Equip = {
+  edit(id){
+    const eq = id ? (State.equip||[]).find(e=>e.id===id) : null;
+    const body = `
+      <div class="frm">
+        <div class="fld"><label>장비명 <span style="color:var(--red)">*</span></label>
+          <input id="eq-name" value="${esc(eq?eq.equipName||'':'')}" placeholder="예: 열화상카메라"></div>
+        <div class="fld"><label>장비번호</label>
+          <input id="eq-no" value="${esc(eq?eq.equipNo||'':'')}" placeholder="예: EQ-001"></div>
+        <div class="fld"><label>SN (시리얼번호)</label>
+          <input id="eq-sn" value="${esc(eq?eq.sn||'':'')}"></div>
+        <div class="fld"><label>구입년도</label>
+          <input id="eq-year" value="${esc(eq?eq.purchaseYear||'':'')}" placeholder="예: 2023"></div>
+        <div class="fld w2"><label>검교정이력</label>
+          <textarea id="eq-cal" rows="2" style="width:100%;resize:vertical" placeholder="예: 2024-03-15 검교정 완료 (○○계측)">${esc(eq?eq.calibrationHistory||'':'')}</textarea></div>
+        <div class="fld w2"><label>고장이력</label>
+          <textarea id="eq-fail" rows="2" style="width:100%;resize:vertical" placeholder="예: 2023-11 배터리 불량 수리">${esc(eq?eq.failureHistory||'':'')}</textarea></div>
+        <div class="fld w2"><label>비고</label>
+          <input id="eq-memo" value="${esc(eq?eq.memo||'':'')}"></div>
+      </div>`;
+    UI.openModal(eq ? '장비 수정 — '+eq.equipName : '장비 등록', body, [
+      {label:'취소', onClick:UI.closeModal},
+      {label:'저장', cls:'pri', onClick:()=>Equip.save(id)}
+    ]);
+  },
+
+  async save(id){
+    const g = i=>document.getElementById(i);
+    const equipName = g('eq-name').value.trim();
+    if(!equipName){ toast('장비명을 입력하세요'); return; }
+    const data = {
+      equipName,
+      equipNo: g('eq-no').value.trim(),
+      sn: g('eq-sn').value.trim(),
+      purchaseYear: g('eq-year').value.trim(),
+      calibrationHistory: g('eq-cal').value.trim(),
+      failureHistory: g('eq-fail').value.trim(),
+      memo: g('eq-memo').value.trim()
+    };
+    if(!State.equip) State.equip = [];
+    if(id){
+      const idx = State.equip.findIndex(e=>e.id===id);
+      if(idx>=0) State.equip[idx] = {...State.equip[idx], ...data};
+    } else {
+      data.id = DB.uid();
+      State.equip.push(data);
+    }
+    toast('저장 중...');
+    try{
+      await State.saveAll();
+      toast('✅ 장비 정보가 저장되었습니다');
+    }catch(e){
+      toast('❌ 저장 실패: '+e.message);
+      return;
+    }
+    UI.closeModal();
+    _renderEquip();
+  },
+
+  async del(id){
+    const eq = (State.equip||[]).find(e=>e.id===id);
+    if(!eq) return;
+    if(!confirm(`[${eq.equipName}] 장비 정보를 삭제할까요?`)) return;
+    State.equip = State.equip.filter(e=>e.id!==id);
+    toast('삭제 중...');
+    try{
+      await supa.from('equip').delete().eq('id', id);
+      await State.saveAll();
+      toast('✅ 삭제되었습니다');
+    }catch(e){
+      toast('❌ 삭제 실패: '+e.message);
+      return;
+    }
+    if(equipTab==='list') _renderEquip(); else _renderEquipByPerson();
+  },
+
+  /* 인수인계 모달: 현재 보유자 → 새 보유자에게 장비를 넘김 */
+  handover(id){
+    const eq = (State.equip||[]).find(e=>e.id===id);
+    if(!eq) return;
+    const staff = (State.hr||[]).filter(h=>h.status==='재직'||!h.status).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    const today = todayStr();
+    const body = `
+      <div style="padding:10px 14px;background:var(--brand-soft);border-radius:8px;font-size:13px;margin-bottom:14px">
+        <b>${esc(eq.equipName)}</b> ${eq.equipNo?'('+esc(eq.equipNo)+')':''}<br>
+        <span style="color:var(--ink2)">현재 보유자: ${eq.holderName?esc(eq.holderName):'미배정(보관중)'}</span>
+      </div>
+      <div class="frm">
+        <div class="fld"><label>인수자 (새 보유자) <span style="color:var(--red)">*</span></label>
+          <select id="ho-name">
+            <option value="">선택하세요</option>
+            <option value="__return__">↩ 반납 (미배정/보관중으로 변경)</option>
+            ${staff.map(h=>`<option value="${esc(h.name)}">${esc(h.name)} (${esc(h.dept||'')} ${esc(h.rank||'')})</option>`).join('')}
+          </select>
+        </div>
+        <div class="fld"><label>인수일자</label><input type="date" id="ho-date" value="${today}"></div>
+        <div class="fld w2"><label>비고</label><input id="ho-memo" placeholder="예: 정기 검교정 위탁 등"></div>
+      </div>`;
+    UI.openModal('인수인계 — '+esc(eq.equipName), body, [
+      {label:'취소', onClick:UI.closeModal},
+      {label:'인수인계 처리', cls:'pri', onClick:()=>Equip.doHandover(id)}
+    ]);
+  },
+
+  async doHandover(id){
+    const g = i=>document.getElementById(i);
+    const eq = (State.equip||[]).find(e=>e.id===id);
+    if(!eq) return;
+    const newHolderRaw = g('ho-name').value;
+    if(!newHolderRaw){ toast('인수자를 선택하세요'); return; }
+    const date = g('ho-date').value || todayStr();
+    const memo = g('ho-memo').value.trim();
+    const isReturn = newHolderRaw === '__return__';
+    const newHolder = isReturn ? '' : newHolderRaw;
+    const prevHolder = eq.holderName || '';
+
+    if(!eq.handoverHistory) eq.handoverHistory = [];
+    const record = {
+      id: DB.uid(),
+      fromName: prevHolder || '(미배정)',
+      toName: isReturn ? '(반납/보관중)' : newHolder,
+      date,
+      memo,
+      // 인수자 확인 절차: 등록 직후엔 '대기중', 인수자가 직접 확인해야 '확인완료'로 바뀜
+      confirmStatus: isReturn ? 'auto' : 'pending', // 'pending'=확인대기, 'confirmed'=확인완료, 'auto'=반납이라 확인불필요
+      confirmedAt: null,
+      workingOk: null,      // 정상작동 여부 (true/false), 확인 시 입력
+      workingNote: ''
+    };
+    eq.handoverHistory.push(record);
+
+    if(isReturn){
+      // 반납은 별도 확인 절차 없이 즉시 미배정 처리
+      eq.holderName = '';
+      eq.holderSince = '';
+    } else {
+      // 인수자 확인 전까지는 보유자를 즉시 바꾸지 않고 '인계 대기중'으로 표시
+      eq.pendingHandoverId = record.id;
+      eq.pendingHolderName = newHolder;
+    }
+
+    toast('처리 중...');
+    try{
+      await State.saveAll();
+      toast(isReturn ? '✅ 반납 처리되었습니다' : '✅ '+newHolder+'님에게 인수인계 등록 완료 (로그인 시 확인 알림이 표시됩니다)');
+    }catch(e){
+      toast('❌ 처리 실패: '+e.message);
+      return;
+    }
+    UI.closeModal();
+    if(equipTab==='list') _renderEquip(); else _renderEquipByPerson();
+  },
+
+  /* 인수자가 본인 화면에서 확인: 수령확인 + 정상작동여부 체크 */
+  confirmReceive(equipId, recordId){
+    const eq = (State.equip||[]).find(e=>e.id===equipId);
+    if(!eq){ toast('❌ 장비 정보를 찾을 수 없습니다'); console.error('confirmReceive: equip not found', equipId); return; }
+    let rec = (eq.handoverHistory||[]).find(r=>r.id===recordId);
+    if(!rec){
+      // recordId가 비어있거나 못 찾은 경우, pendingHandoverId 기준으로 한 번 더 시도 (하위호환 + 방어)
+      rec = (eq.handoverHistory||[]).find(r=>r.id===eq.pendingHandoverId);
+    }
+    if(!rec){
+      // 그래도 못 찾으면, '대기중(pending)' 상태인 가장 최근 이력을 사용 (최후 방어)
+      rec = (eq.handoverHistory||[]).slice().reverse().find(r=>r.confirmStatus==='pending');
+    }
+    if(!rec){
+      toast('❌ 인수인계 이력을 찾을 수 없습니다. 관리자에게 문의해주세요.');
+      console.error('confirmReceive: record not found', {equipId, recordId, eq});
+      return;
+    }
+    const body = `
+      <div style="padding:10px 14px;background:var(--brand-soft);border-radius:8px;font-size:13px;margin-bottom:14px">
+        <b>${esc(eq.equipName)}</b> ${eq.equipNo?'('+esc(eq.equipNo)+')':''} 을(를) 인수합니다.<br>
+        <span style="color:var(--ink2)">인계자: ${esc(rec.fromName)} · 인계일: ${esc(rec.date)}</span>
+      </div>
+      <div class="frm">
+        <div class="fld w2">
+          <label>장비 정상작동 여부 <span style="color:var(--red)">*</span></label>
+          <div style="display:flex;gap:14px;margin-top:4px">
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="working-ok" value="true" checked> 정상 작동함</label>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="working-ok" value="false"> 이상 있음</label>
+          </div>
+        </div>
+        <div class="fld w2"><label>확인 비고 (이상 있을 경우 내용 기재)</label>
+          <textarea id="cf-note" rows="2" style="width:100%;resize:vertical" placeholder="예: 배터리 잔량 부족, 케이스 파손 등"></textarea></div>
+      </div>`;
+    UI.openModal('인수 확인 — '+esc(eq.equipName), body, [
+      {label:'취소', onClick:UI.closeModal},
+      {label:'✅ 수령 확인 완료', cls:'pri', onClick:()=>Equip.doConfirmReceive(equipId, recordId)}
+    ]);
+  },
+
+  async doConfirmReceive(equipId, recordId){
+    const eq = (State.equip||[]).find(e=>e.id===equipId);
+    if(!eq){ toast('❌ 장비 정보를 찾을 수 없습니다'); return; }
+    let rec = (eq.handoverHistory||[]).find(r=>r.id===recordId);
+    if(!rec) rec = (eq.handoverHistory||[]).find(r=>r.id===eq.pendingHandoverId);
+    if(!rec) rec = (eq.handoverHistory||[]).slice().reverse().find(r=>r.confirmStatus==='pending');
+    if(!rec){ toast('❌ 인수인계 이력을 찾을 수 없습니다'); return; }
+    const workingOk = (document.querySelector('input[name="working-ok"]:checked')||{}).value === 'true';
+    const note = (document.getElementById('cf-note')||{}).value?.trim() || '';
+
+    rec.confirmStatus = 'confirmed';
+    rec.confirmedAt = new Date().toISOString();
+    rec.workingOk = workingOk;
+    rec.workingNote = note;
+
+    // 확인이 완료된 시점에 비로소 보유자 확정
+    eq.holderName = eq.pendingHolderName || rec.toName;
+    eq.holderSince = rec.date;
+    delete eq.pendingHandoverId;
+    delete eq.pendingHolderName;
+
+    toast('처리 중...');
+    try{
+      await State.saveAll();
+      toast(workingOk ? '✅ 인수 확인 완료 (정상 작동)' : '⚠ 인수 확인 완료 (이상 있음으로 기록됨)');
+    }catch(e){
+      toast('❌ 처리 실패: '+e.message);
+      return;
+    }
+    UI.closeModal();
+    SupaAuth.renderHandoverAlerts();
+    if(typeof Views!=='undefined' && location.hash==='#equip'){
+      if(equipTab==='list') _renderEquip(); else _renderEquipByPerson();
+    }
+  },
+
+  /* 인수인계 이력 보기 */
+  history(id){
+    const eq = (State.equip||[]).find(e=>e.id===id);
+    if(!eq) return;
+    const hist = (eq.handoverHistory||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    const rows = hist.length
+      ? hist.map(h=>{
+          let statusTag;
+          if(h.confirmStatus==='confirmed'){
+            statusTag = h.workingOk
+              ? '<span class="tag t2">✅ 확인완료(정상)</span>'
+              : '<span class="tag" style="background:#ffebee;color:#c62828">⚠ 확인완료(이상있음)</span>';
+          } else if(h.confirmStatus==='pending'){
+            statusTag = '<span class="tag t4">⏳ 확인대기중</span>';
+          } else {
+            statusTag = '<span class="tag gray">반납</span>';
+          }
+          const note = h.workingNote ? '<div style="font-size:11px;color:#c62828;margin-top:2px">'+esc(h.workingNote)+'</div>' : '';
+          return `<tr>
+            <td style="font-size:12px">${esc(h.date||'-')}</td>
+            <td>${esc(h.fromName||'-')} → <b>${esc(h.toName||'-')}</b>${note}</td>
+            <td class="ctr">${statusTag}</td>
+            <td style="font-size:12px;color:var(--ink3)">${esc(h.memo||'')}</td>
+          </tr>`;
+        }).join('')
+      : `<tr><td colspan="4"><div class="empty">인수인계 이력이 없습니다</div></td></tr>`;
+    const body = `
+      <div style="margin-bottom:10px;font-size:13px;color:var(--ink2)">
+        <b>${esc(eq.equipName)}</b> ${eq.equipNo?'('+esc(eq.equipNo)+')':''} · 현재 보유자: ${eq.holderName?esc(eq.holderName):'미배정(보관중)'}
+      </div>
+      <table class="grid" style="font-size:13px">
+        <thead><tr><th style="width:100px">일자</th><th>인계 내역</th><th class="ctr" style="width:140px">확인상태</th><th>비고</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    UI.openModal('인수인계 이력 — '+esc(eq.equipName), body, [
+      {label:'닫기', cls:'pri', onClick:UI.closeModal}
+    ]);
+  },
+
+  /* 업로드 양식 다운로드 */
+  template(){
+    const sample = [{
+      '장비명':'열화상카메라', '장비번호':'EQ-001', 'SN':'SN12345',
+      '검교정이력':'2024-03-15 검교정 완료 (○○계측)', '구입년도':'2023',
+      '고장이력':'', '비고':'예시 행입니다. 지우고 입력하세요'
+    }];
+    const guide = XLSX.utils.aoa_to_sheet([
+      ['엔자인 ERP 진단장비현황 일괄등록 양식 안내'],[''],
+      ['열 이름','설명'],
+      ['장비명','필수 입력'],
+      ['장비번호','선택 입력. 예: EQ-001'],
+      ['SN','시리얼번호, 선택 입력'],
+      ['검교정이력','선택 입력. 자유 텍스트'],
+      ['구입년도','선택 입력. 예: 2023'],
+      ['고장이력','선택 입력. 자유 텍스트'],
+      ['비고','선택 입력'],[''],
+      ['※ 장비명+SN이 모두 일치하는 기존 행이 있으면 덮어씁니다 (없으면 신규 등록)']
+    ]);
+    guide['!cols'] = [{wch:12},{wch:70}];
+    const ws = XLSX.utils.json_to_sheet(sample);
+    ws['!cols'] = [{wch:18},{wch:14},{wch:16},{wch:30},{wch:10},{wch:30},{wch:24}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '장비입력');
+    XLSX.utils.book_append_sheet(wb, guide, '작성안내');
+    XLSX.writeFile(wb, '엔자인_진단장비현황등록양식.xlsx');
+  },
+
+  /* 일괄등록 엑셀 업로드 */
+  importXlsx(input){
+    const file = input.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async e=>{
+      try{
+        const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
+        const sheetName = wb.SheetNames.includes('장비입력') ? '장비입력' : wb.SheetNames[0];
+        const json = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {defval:''});
+        if(!State.equip) State.equip = [];
+        let ok=0, skip=0;
+        json.forEach(r=>{
+          const keys = Object.keys(r);
+          const get = names=>{ const k=keys.find(k=>names.some(n=>k.replace(/\s/g,'').includes(n))); return k!=null?String(r[k]||'').trim():''; };
+          const equipName = get(['장비명']);
+          if(!equipName){ if(keys.some(k=>String(r[k]).trim()!=='')) skip++; return; }
+          const sn = get(['SN','시리얼']);
+          const data = {
+            equipName,
+            equipNo: get(['장비번호']),
+            sn,
+            calibrationHistory: get(['검교정이력','검교정']),
+            purchaseYear: get(['구입년도','구입년','년도']),
+            failureHistory: get(['고장이력','고장']),
+            memo: get(['비고','메모'])
+          };
+          const existIdx = State.equip.findIndex(e=>e.equipName===equipName && (e.sn||'')===sn);
+          if(existIdx>=0){ State.equip[existIdx] = {...State.equip[existIdx], ...data}; }
+          else { data.id = DB.uid(); State.equip.push(data); }
+          ok++;
+        });
+        if(ok===0){ toast('처리할 데이터가 없습니다'); input.value=''; return; }
+        toast('저장 중...');
+        try{
+          await State.saveAll();
+          toast('✅ '+ok+'건 저장 완료'+(skip?' · 건너뜀 '+skip+'건':''));
+        }catch(saveErr){
+          toast('❌ 저장 실패: '+saveErr.message);
+          input.value=''; return;
+        }
+        _renderEquip();
+      }catch(err){ toast('가져오기 실패: 파일 형식을 확인하세요'); console.error(err); }
+      input.value='';
+    };
+    reader.readAsArrayBuffer(file);
+  },
+
+  /* 엑셀 내보내기 */
+  exportXlsx(){
+    const rows = (State.equip||[]).map(eq=>({
+      '장비명': eq.equipName||'', '장비번호': eq.equipNo||'', 'SN': eq.sn||'',
+      '검교정이력': eq.calibrationHistory||'', '구입년도': eq.purchaseYear||'',
+      '고장이력': eq.failureHistory||'', '비고': eq.memo||''
+    }));
+    if(!rows.length){ toast('내보낼 데이터가 없습니다'); return; }
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{wch:18},{wch:14},{wch:16},{wch:30},{wch:10},{wch:30},{wch:24}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '진단장비현황');
+    XLSX.writeFile(wb, `엔자인_진단장비현황_${todayStr()}.xlsx`);
+  }
+};
 </script>
 </body>
 </html>
