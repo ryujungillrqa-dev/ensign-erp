@@ -2850,15 +2850,6 @@ const PinAuth={
     var role=(profRes.data&&profRes.data.length>0&&profRes.data[0].role)?profRes.data[0].role:'일반직원';
     var email=(profRes.data&&profRes.data.length>0&&profRes.data[0].email)?profRes.data[0].email:'';
 
-    // 관리자/부관리자는 보안상 PIN 등록 자체를 막고 이메일 로그인으로만 접근하도록 안내
-    if(role==='관리자' || role==='부관리자'){
-      errEl.textContent='관리자/부관리자 계정은 PIN 로그인을 사용할 수 없습니다. 하단 "관리자" 버튼을 눌러 이메일로 로그인해주세요.';
-      errEl.style.display='block';
-      this._setupPin=''; this._confirmPin=''; this._step='setup';
-      this._dots('setup-dots',0); this._dots('confirm-dots',0);
-      return;
-    }
-
     var localUser={userId:hr.id,name:hr.name,role:role,email:email,rank:hr.rank,dept:hr.dept};
     var pinHash=this._hash(this._setupPin,hr.id);
     // 이 기기에 영구 등록 (한 기기 = 한 사람, "다른 계정으로 로그인" 기능 제거로 승인 절차 불필요)
