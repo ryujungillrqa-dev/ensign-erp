@@ -5109,11 +5109,13 @@ const Equip = {
 const EXP_CATS = {
   '숙박': [],
   '식대': [],
+  '주유비': [],
+  '차량유지': [],
   '장비': [],
-  '차량': ['주유','유지관리','기타'],
+  '자문&용역': [],
   '기타': []
 };
-const EXP_CAT_ICON = {'숙박':'🏨','식대':'🍽️','장비':'🔧','차량':'🚗','기타':'📋'};
+const EXP_CAT_ICON = {'숙박':'🏨','식대':'🍽️','주유비':'⛽','차량유지':'🚗','장비':'🔧','자문&용역':'📝','기타':'📋'};
 
 let expFilter = { q:'', dept:'', category:'', status:'', dateFrom:'', dateTo:'',
   year: String(new Date().getFullYear()) };
@@ -5202,8 +5204,6 @@ function _renderExpense(){
 
   const isAdmin = _supaProfile?.role==='관리자'||_supaProfile?.role==='부관리자';
   const rows = list.map(e=>{
-    const c = e.contractId ? State.contracts.find(x=>x.id===e.contractId) : null;
-    const catLabel = EXP_CAT_ICON[e.category]||'' + e.category + (e.subCategory?' · '+e.subCategory:'');
     const statusTag = e.status==='승인'
       ? '<span class="tag t2">✅ 승인</span>'
       : e.status==='반려'
@@ -5217,11 +5217,9 @@ function _renderExpense(){
       <td style="font-size:12px">${esc(e.date)}</td>
       <td><b>${esc(e.empName||'')}</b></td>
       <td style="font-size:12px;color:var(--ink2)">${esc(e.dept||'-')}</td>
-      <td>${EXP_CAT_ICON[e.category]||''} ${esc(e.category||'')}${e.subCategory?' <span style="color:var(--ink3);font-size:11px">·'+esc(e.subCategory)+'</span>':''}</td>
+      <td>${EXP_CAT_ICON[e.category]||''} ${esc(e.category||'')}</td>
       <td class="num"><b>${fmt.money(Number(e.amount)||0)}</b></td>
-      <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c?c.no+' '+c.name:'')}">${c?esc(c.no):'-'}</td>
-      <td style="font-size:12px;color:var(--ink2);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.receiptNote||'')}">${esc(e.receiptNote||'-')}</td>
-      <td style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.memo||'')}">${esc(e.memo||'-')}</td>
+      <td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.memo||'')}">${esc(e.memo||'-')}</td>
       <td class="ctr">${statusTag}</td>
       <td class="ctr">
         ${adminBtns}
@@ -5237,12 +5235,10 @@ function _renderExpense(){
         <thead><tr>
           <th style="width:90px">날짜</th>
           <th style="width:80px">직원</th>
-          <th style="width:90px">본부</th>
-          <th style="width:130px">사용구분</th>
+          <th style="width:100px">사업본부</th>
+          <th style="width:110px">사용구분</th>
           <th class="num" style="width:100px">금액(원)</th>
-          <th style="width:90px">계약연결</th>
-          <th style="width:120px">영수증</th>
-          <th style="width:140px">비고</th>
+          <th style="width:200px">비고</th>
           <th class="ctr" style="width:70px">상태</th>
           <th class="ctr" style="width:160px">관리</th>
         </tr></thead>
@@ -5255,13 +5251,7 @@ const Expense = {
   edit(id){
     const e = id ? (State.expense||[]).find(x=>x.id===id) : null;
     const staff = (State.hr||[]).filter(h=>h.status==='재직'||!h.status).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-    const ctOpts = [['','(계약 연결 없음)'], ...(State.contracts||[])
-      .sort((a,b)=>b.no.localeCompare(a.no))
-      .map(c=>[c.id, `[${c.no}] ${c.name} (${c.client})`])];
     const today = todayStr();
-    const catSel = e?.category||'';
-    const subOpts = (EXP_CATS[catSel]||[]).map(s=>
-      `<option value="${s}" ${e?.subCategory===s?'selected':''}>${s}</option>`).join('');
 
     const body = `
       <div class="frm">
@@ -5272,29 +5262,17 @@ const Expense = {
             <option value="">선택</option>
             ${staff.map(h=>`<option value="${h.name}" data-dept="${esc(h.dept||'')}" ${e?.empName===h.name?'selected':''}>${esc(h.name)} (${esc(h.dept||'')})</option>`).join('')}
           </select></div>
-        <div class="fld"><label>본부</label>
-          <input id="ep-dept" value="${esc(e?e.dept||'':'')}" readonly style="background:#f5f5f5"></div>
+        <div class="fld"><label>사업본부</label>
+          <input id="ep-dept" value="${esc(e?e.dept||'':'')}" readonly style="background:#f5f5f5" placeholder="직원 선택 시 자동 입력"></div>
         <div class="fld"><label>사용구분 <span style="color:var(--red)">*</span></label>
-          <select id="ep-cat" onchange="Expense._onCatChange(this)">
+          <select id="ep-cat">
             <option value="">선택</option>
             ${Object.keys(EXP_CATS).map(c=>`<option value="${c}" ${e?.category===c?'selected':''}>${EXP_CAT_ICON[c]} ${c}</option>`).join('')}
           </select></div>
-        <div class="fld" id="ep-subcat-wrap" style="${EXP_CATS[catSel]?.length?'':'display:none'}">
-          <label>세부구분</label>
-          <select id="ep-subcat">
-            <option value="">-</option>
-            ${subOpts}
-          </select></div>
         <div class="fld"><label>금액(원) <span style="color:var(--red)">*</span></label>
           <input type="number" id="ep-amount" value="${e?e.amount:''}" placeholder="예: 50000" min="0"></div>
-        <div class="fld w2"><label>계약 연결 (선택)</label>
-          <select id="ep-contract">
-            ${ctOpts.map(([v,l])=>`<option value="${v}" ${e?.contractId===v?'selected':''}>${esc(l)}</option>`).join('')}
-          </select></div>
-        <div class="fld"><label>영수증 (파일명/메모)</label>
-          <input id="ep-receipt" value="${esc(e?e.receiptNote||'':'')}" placeholder="예: 영수증_20260315.jpg"></div>
-        <div class="fld"><label>비고</label>
-          <input id="ep-memo" value="${esc(e?e.memo||'':'')}"></div>
+        <div class="fld w2"><label>비고</label>
+          <input id="ep-memo" value="${esc(e?e.memo||'':'')}"}></div>
       </div>`;
     UI.openModal(e?'지출 수정':'지출 등록', body, [
       {label:'취소', onClick:UI.closeModal},
@@ -5306,13 +5284,7 @@ const Expense = {
     const dept = opt?.getAttribute('data-dept')||'';
     document.getElementById('ep-dept').value = dept;
   },
-  _onCatChange(sel){
-    const subs = EXP_CATS[sel.value]||[];
-    const wrap = document.getElementById('ep-subcat-wrap');
-    const subSel = document.getElementById('ep-subcat');
-    wrap.style.display = subs.length ? '' : 'none';
-    subSel.innerHTML = '<option value="">-</option>' + subs.map(s=>`<option value="${s}">${s}</option>`).join('');
-  },
+
   async save(id){
     const g = i=>document.getElementById(i);
     const date = g('ep-date').value;
@@ -5325,9 +5297,9 @@ const Expense = {
     if(!amount){ toast('금액을 입력하세요'); return; }
     const data = {
       date, empName, dept: g('ep-dept').value,
-      category, subCategory: g('ep-subcat')?.value||'',
-      amount, contractId: g('ep-contract').value||null,
-      receiptNote: g('ep-receipt').value.trim(),
+      category, subCategory: '',
+      amount, contractId: null,
+      receiptNote: '',
       memo: g('ep-memo').value.trim(),
       status: id ? ((State.expense||[]).find(x=>x.id===id)?.status||'대기') : '대기'
     };
@@ -5422,14 +5394,14 @@ const Expense = {
       ['열 이름','설명 및 선택 가능한 값'],
       ['날짜','YYYY-MM-DD 형식. 예: 2026-03-15'],
       ['직원명','"목록" 시트 [직원명] 열에서 복사해 입력하세요'],
-      ['본부','"목록" 시트 [본부] 열 참고 — 인사관리에 등록된 본부명 자동 조회'],
+      ['사업본부','"목록" 시트 [사업본부] 열 참고 — 인사관리에 등록된 본부명 자동 조회'],
       ['사용구분','"목록" 시트 [사용구분] 열 참고: '+cats.join(' / ')],
       ['금액(원)','숫자만 입력. 예: 50000'],
       ['비고','자유 입력'],[''],
       ['⚠ 주의사항',''],
       ['업로드 시 상태는 자동으로 "대기"로 등록됩니다','관리자가 승인/반려 처리'],
       ['사용구분은 목록에 있는 값만 인식됩니다',cats.join(', ')],
-      ['본부는 인사관리 기준으로 자동 조회됩니다','목록 시트에서 확인 가능'],
+      ['사업본부는 인사관리 기준으로 자동 조회됩니다','목록 시트에서 확인 가능'],
     ]);
     guide['!cols']=[{wch:40},{wch:60}];
     if(guide['A1']) guide['A1'].s={font:{bold:true,sz:13}};
@@ -5463,7 +5435,7 @@ const Expense = {
           const hrMatch=(State.hr||[]).find(h=>h.name===empName);
           const data={
             id:DB.uid(), date, empName,
-            dept:hrMatch?.dept||get(['본부','부서'])||'',
+            dept:hrMatch?.dept||get(['사업본부','본부','부서'])||'',
             category, subCategory:'',
             amount, contractId:null,
             receiptNote:'',
