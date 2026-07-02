@@ -5370,30 +5370,75 @@ const Expense = {
     catch(err){ toast('❌ 실패: '+err.message); }
   },
   template(){
-    const sample=[{
-      '날짜':'2026-03-15','직원명':'홍길동','본부':'에너지진단팀',
-      '사용구분':'식대','세부구분':'','금액':35000,
-      '계약번호':'','영수증':'영수증_20260315.jpg','비고':'현장방문 식사','상태':'대기'
-    }];
-    const guide = XLSX.utils.aoa_to_sheet([
-      ['엔자인 ERP 지출보고 일괄등록 양식'],[''],
-      ['열','설명'],
-      ['날짜','YYYY-MM-DD 형식. 예: 2026-03-15'],
-      ['직원명','인사관리에 등록된 정확한 이름'],
-      ['본부','자동 조회되나 직접 입력도 가능'],
-      ['사용구분','숙박 / 식대 / 장비 / 차량 / 기타'],
-      ['세부구분','차량일 경우: 주유 / 유지관리 / 기타'],
-      ['금액','숫자만 입력 (원 단위)'],
-      ['계약번호','선택 입력. 계약관리의 계약번호'],
-      ['영수증','파일명 또는 메모'],
-      ['비고','선택 입력'],
-      ['상태','비워두면 "대기"로 등록됨'],
+    // 인사관리에서 본부 목록 추출
+    const depts = [...new Set((State.hr||[]).map(h=>h.dept||'').filter(Boolean))].sort();
+    const empList = (State.hr||[]).filter(h=>h.status==='재직'||!h.status).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    const cats = Object.keys(EXP_CATS);
+    const subCats = {'차량':['주유','유지관리','기타']};
+    const ctList = (State.contracts||[]).sort((a,b)=>b.no.localeCompare(a.no)).map(c=>c.no+' '+c.name);
+
+    // ── 지출입력 시트: 헤더 + 예시행 (날짜/직원명/본부/사용구분/금액/비고만) ──
+    const COLS = ['날짜','직원명','본부','사용구분','금액(원)','비고'];
+    const ws = XLSX.utils.aoa_to_sheet([
+      COLS,
+      ['2026-03-15','홍길동','에너지진단팀','식대',35000,'현장방문 식사']
     ]);
-    guide['!cols']=[{wch:12},{wch:60}];
-    const ws = XLSX.utils.json_to_sheet(sample);
-    ws['!cols']=[{wch:12},{wch:10},{wch:14},{wch:8},{wch:8},{wch:10},{wch:12},{wch:20},{wch:20},{wch:8}];
+    // 헤더 배경색 (노란색)
+    COLS.forEach(function(c, ci){
+      const cellRef = XLSX.utils.encode_cell({r:0, c:ci});
+      if(!ws[cellRef]) ws[cellRef]={v:c,t:'s'};
+      ws[cellRef].s = {fill:{fgColor:{rgb:'FFD700'}}, font:{bold:true}};
+    });
+    // 본부·사용구분 열에 연한 초록 배경 (선택 안내)
+    [2,3].forEach(function(ci){
+      const ref = XLSX.utils.encode_cell({r:1, c:ci});
+      if(ws[ref]) ws[ref].s = {fill:{fgColor:{rgb:'E8F5E9'}}};
+    });
+    ws['!cols']=[{wch:14},{wch:12},{wch:16},{wch:10},{wch:12},{wch:28}];
+
+    // ── 목록 시트: 드롭다운 참조용 ──
+    const maxRows = Math.max(depts.length, cats.length, empList.length, ctList.length, 10);
+    const listData = [['직원명','본부','사용구분','세부구분(차량만)','계약번호']];
+    for(let i=0;i<maxRows;i++){
+      listData.push([
+        empList[i]?empList[i].name:'',
+        depts[i]||'',
+        cats[i]||'',
+        (subCats['차량']||[])[i]||'',
+        ctList[i]||''
+      ]);
+    }
+    const wsList = XLSX.utils.aoa_to_sheet(listData);
+    wsList['!cols']=[{wch:12},{wch:16},{wch:10},{wch:14},{wch:36}];
+    // 헤더 스타일
+    ['A1','B1','C1','D1','E1'].forEach(function(r){
+      if(wsList[r]) wsList[r].s={fill:{fgColor:{rgb:'4472C4'}},font:{bold:true,color:{rgb:'FFFFFF'}}};
+    });
+
+    // ── 작성안내 시트 ──
+    const guide = XLSX.utils.aoa_to_sheet([
+      ['엔자인 ERP 지출보고 일괄등록 양식 작성안내'],[''],
+      ['📌 입력 방법',''],
+      ['열 이름','설명 및 선택 가능한 값'],
+      ['날짜','YYYY-MM-DD 형식. 예: 2026-03-15'],
+      ['직원명','"목록" 시트 [직원명] 열에서 복사해 입력하세요'],
+      ['본부','"목록" 시트 [본부] 열 참고 — 인사관리에 등록된 본부명 자동 조회'],
+      ['사용구분','"목록" 시트 [사용구분] 열 참고: '+cats.join(' / ')],
+      ['금액(원)','숫자만 입력. 예: 50000'],
+      ['비고','자유 입력'],[''],
+      ['⚠ 주의사항',''],
+      ['업로드 시 상태는 자동으로 "대기"로 등록됩니다','관리자가 승인/반려 처리'],
+      ['사용구분은 목록에 있는 값만 인식됩니다',cats.join(', ')],
+      ['본부는 인사관리 기준으로 자동 조회됩니다','목록 시트에서 확인 가능'],
+    ]);
+    guide['!cols']=[{wch:40},{wch:60}];
+    if(guide['A1']) guide['A1'].s={font:{bold:true,sz:13}};
+    if(guide['A4']) guide['A4'].s={fill:{fgColor:{rgb:'FFD700'}},font:{bold:true}};
+    if(guide['B4']) guide['B4'].s={fill:{fgColor:{rgb:'FFD700'}},font:{bold:true}};
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,'지출입력');
+    XLSX.utils.book_append_sheet(wb,wsList,'목록');
     XLSX.utils.book_append_sheet(wb,guide,'작성안내');
     XLSX.writeFile(wb,'엔자인_지출보고등록양식.xlsx');
   },
@@ -5412,21 +5457,18 @@ const Expense = {
           const date=get(['날짜','일자','date']);
           const empName=get(['직원명','직원','이름','name']);
           const category=get(['사용구분','구분','category']);
-          const amount=Number(String(get(['금액','amount'])).replace(/,/g,''))||0;
+          const amount=Number(String(get(['금액(원)','금액','amount'])).replace(/,/g,''))||0;
           if(!date||!empName||!category||!amount){skip++;return;}
-          // 계약번호로 contractId 조회
-          const ctNo=get(['계약번호','계약']);
-          const ct=ctNo?(State.contracts||[]).find(c=>c.no===ctNo):null;
-          // 직원 본부 자동 조회
+          // 직원 본부 자동 조회 (인사관리 기준, 없으면 엑셀 입력값 사용)
           const hrMatch=(State.hr||[]).find(h=>h.name===empName);
           const data={
             id:DB.uid(), date, empName,
-            dept:get(['본부','부서'])||hrMatch?.dept||'',
-            category, subCategory:get(['세부구분','세부']),
-            amount, contractId:ct?ct.id:null,
-            receiptNote:get(['영수증']),
+            dept:hrMatch?.dept||get(['본부','부서'])||'',
+            category, subCategory:'',
+            amount, contractId:null,
+            receiptNote:'',
             memo:get(['비고','메모']),
-            status:get(['상태'])||'대기'
+            status:'대기'  // 업로드 시 항상 대기 상태로 등록
           };
           State.expense.push(data); ok++;
         });
