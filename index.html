@@ -191,6 +191,7 @@ table.dz td.num-ro{padding:6px 9px;text-align:right;font-variant-numeric:tabular
     <a href="#equip" data-v="equip"><span class="ic">🔧</span>진단장비현황</a>
     <a href="#expense" data-v="expense"><span class="ic">💰</span>지출보고</a>
     <a href="#invoices" data-v="invoices"><span class="ic">🧾</span>세금계산서</a>
+    <a href="#payroll" data-v="payroll"><span class="ic">💵</span>급여관리</a>
     <div class="grp">관리자</div>
     <a href="#dash" data-v="dash"><span class="ic">▦</span>대시보드</a>
     <a href="#hr" data-v="hr"><span class="ic">👥</span>인사관리</a>
@@ -235,11 +236,11 @@ const supa = window.supabase.createClient(SUPA_URL, SUPA_KEY);
 let _supaUser = null;
 let _supaProfile = null;
 const ROLE_MENUS = {
-  '관리자':    ['contracts','ediagmail','ediag','equip','expense','invoices','dash','hr','auth','bank','match','savings','settings'],
-  '부관리자':  ['contracts','ediagmail','ediag','equip','expense','invoices','dash','hr','auth','settings'],
+  '관리자':    ['contracts','ediagmail','ediag','equip','expense','invoices','payroll','dash','hr','auth','bank','match','savings','settings'],
+  '부관리자':  ['contracts','ediagmail','ediag','equip','expense','invoices','payroll','dash','hr','auth','settings'],
   '계약담당':  ['contracts','ediagmail','ediag','equip','expense','invoices','dash'],
   '진단팀장':  ['contracts','ediagmail','ediag','equip','expense','invoices'],
-  '자금담당':  ['contracts','ediagmail','ediag','expense','invoices','hr'],
+  '자금담당':  ['contracts','ediagmail','ediag','expense','invoices','payroll','hr'],
   '일반직원':  ['contracts','ediagmail','ediag','equip','expense','invoices'],
 };
 
@@ -265,8 +266,9 @@ const State = {
   ediag:     DB.read('ediag', []),   // [{id,contractId,leader,members,startDate,endDate,memo,files:{report:{name,size,data},review:{name,size,data}}}]       // {id, name, dept, position, rank, joinDate, status(재직/휴직/퇴직), birth, email, phone, memo}    // {id, name, bankName, monthly, start, maturity, payments:[{date,amount}], memo}
   equip:     DB.read('equip', []),   // [{id, equipName, equipNo, sn, calibrationHistory, purchaseYear, failureHistory, memo}]
   expense:   DB.read('expense', []), // [{id, date, empName, dept, category, subCategory, amount, contractId, receiptNote, memo, status}]
+  payroll:   DB.read('payroll', []), // [{id, ym, salary, insureEmp, insureComp, severance, memo}]
   settings:  DB.read('settings', { company:'㈜엔자인', ceo:'', bizNo:'' }),
-  saveAll(){ DB.write('contracts',this.contracts); DB.write('invoices',this.invoices); DB.write('bank',this.bank); DB.write('savings',this.savings); DB.write('settings',this.settings); DB.write('hr',this.hr); DB.write('auth',this.auth); DB.write('ediag',this.ediag); DB.write('equip',this.equip); DB.write('expense',this.expense); }
+  saveAll(){ DB.write('contracts',this.contracts); DB.write('invoices',this.invoices); DB.write('bank',this.bank); DB.write('savings',this.savings); DB.write('settings',this.settings); DB.write('hr',this.hr); DB.write('auth',this.auth); DB.write('ediag',this.ediag); DB.write('equip',this.equip); DB.write('expense',this.expense); DB.write('payroll',this.payroll); }
 };
 
 /* ===== 도메인 상수 ===== */
@@ -357,6 +359,7 @@ const VIEW_META = {
   auth:{title:'권한관리', crumb:'메뉴별 접근 권한 · 직급별 설정'},
   equip:{title:'진단장비현황', crumb:'에너지진단 장비 · 검교정 · 고장이력 관리'},
   expense:{title:'지출보고', crumb:'직원별 · 본부별 · 구분별 지출 관리'},
+  payroll:{title:'급여관리', crumb:'월별 급여 · 4대보험 · 퇴직금 관리'},
   ediag:{title:'에너지진단', crumb:'에너지진단팀 계약 · 진단팀 구성 관리'},
   ediagmail:{title:'진단일정등록', crumb:'에너지진단 일정 등록 · 팀장 메일 발송'}
 };
@@ -2597,6 +2600,8 @@ const _conv={
   ediagFrom:function(r){return{id:r.id,contractId:r.contract_id,leader:r.leader,members:r.members||[],startDate:r.start_date,endDate:r.end_date,memo:r.memo,memberSchedules:r.member_schedules||{},files:r.files||{}};},
   equipTo:function(e){return{id:e.id,equip_name:e.equipName||'',equip_no:e.equipNo||'',sn:e.sn||'',calibration_history:e.calibrationHistory||'',purchase_year:e.purchaseYear||'',failure_history:e.failureHistory||'',memo:e.memo||'',holder_name:e.holderName||'',holder_since:e.holderSince||'',handover_history:e.handoverHistory||[],pending_handover_id:e.pendingHandoverId||null,pending_holder_name:e.pendingHolderName||null};},
   equipFrom:function(r){return{id:r.id,equipName:r.equip_name,equipNo:r.equip_no,sn:r.sn,calibrationHistory:r.calibration_history,purchaseYear:r.purchase_year,failureHistory:r.failure_history,memo:r.memo,holderName:r.holder_name||'',holderSince:r.holder_since||'',handoverHistory:r.handover_history||[],pendingHandoverId:r.pending_handover_id||null,pendingHolderName:r.pending_holder_name||null};},
+  payrollTo:function(p){return{id:p.id,ym:p.ym||'',salary:p.salary||0,insure_emp:p.insureEmp||0,insure_comp:p.insureComp||0,severance:p.severance||0,memo:p.memo||''};},
+  payrollFrom:function(r){return{id:r.id,ym:r.ym||'',salary:r.salary||0,insureEmp:r.insure_emp||0,insureComp:r.insure_comp||0,severance:r.severance||0,memo:r.memo||''};},
   expenseTo:function(e){return{id:e.id,date:e.date||'',emp_name:e.empName||'',dept:e.dept||'',category:e.category||'',sub_category:e.subCategory||'',amount:e.amount||0,contract_id:e.contractId||null,receipt_note:e.receiptNote||'',memo:e.memo||'',status:e.status||'대기'};},
   expenseFrom:function(r){return{id:r.id,date:r.date||'',empName:r.emp_name||'',dept:r.dept||'',category:r.category||'',subCategory:r.sub_category||'',amount:r.amount||0,contractId:r.contract_id||null,receiptNote:r.receipt_note||'',memo:r.memo||'',status:r.status||'대기'};},
 };
@@ -2613,6 +2618,7 @@ async function supaLoadAll(){
       supa.from('auth_settings').select('*').eq('id',1).maybeSingle(),
       supa.from('equip').select('*'),
       supa.from('expense').select('*').order('date',{ascending:false}),
+      supa.from('payroll').select('*').order('ym',{ascending:false}),
     ]);
     State.contracts=(results[0].data||[]).map(_conv.ctFrom);
     State.invoices=(results[1].data||[]).map(_conv.invFrom);
@@ -2623,6 +2629,7 @@ async function supaLoadAll(){
     State.auth=results[6].data?{roles:results[6].data.roles||{},users:results[6].data.users||{}}:{roles:{},users:{}};
     State.equip=(results[7].data||[]).map(_conv.equipFrom);
     State.expense=(results[8].data||[]).map(_conv.expenseFrom);
+    State.payroll=(results[9].data||[]).map(_conv.payrollFrom);
     // 팀 기반 필터링 적용
     applyTeamFilter();
   }catch(e){console.error('로드 오류:',e);}
@@ -2680,6 +2687,7 @@ State.saveAll=async function(){
     if(State.ediag.length){     jobs.push(supa.from('ediag').upsert(State.ediag.map(_conv.ediagTo)));      labels.push('ediag'); }
     if(State.equip.length){     jobs.push(supa.from('equip').upsert(State.equip.map(_conv.equipTo)));      labels.push('equip'); }
     if(State.expense.length){   jobs.push(supa.from('expense').upsert(State.expense.map(_conv.expenseTo)));  labels.push('expense'); }
+    if(State.payroll.length){   jobs.push(supa.from('payroll').upsert(State.payroll.map(_conv.payrollTo)));  labels.push('payroll'); }
     // 메모리(State)에서 삭제된 행이 Supabase에 남아있지 않도록 명시적으로 제거
     // (팀 필터링 대상 사용자는 본인이 못 보는 데이터를 건드릴 수 없으므로 제외)
     if(!isFiltered){
@@ -2709,6 +2717,11 @@ State.saveAll=async function(){
         var dbExpRes = await supa.from('expense').select('id');
         var orphanExpIds = (dbExpRes.data||[]).map(function(r){return r.id;}).filter(function(id){return !liveExpIds.has(id);});
         if(orphanExpIds.length) jobs.push(supa.from('expense').delete().in('id', orphanExpIds));
+
+        var livePayIds = new Set(State.payroll.map(function(p){return p.id;}));
+        var dbPayRes = await supa.from('payroll').select('id');
+        var orphanPayIds = (dbPayRes.data||[]).map(function(r){return r.id;}).filter(function(id){return !livePayIds.has(id);});
+        if(orphanPayIds.length) jobs.push(supa.from('payroll').delete().in('id', orphanPayIds));
       }catch(e){ console.error('고아행 정리 오류:', e); }
     }
     if(!isFiltered){
@@ -3361,6 +3374,7 @@ const AUTH_MENUS = [
   { key:'ediag',      label:'에너지진단' },
   { key:'equip',      label:'진단장비현황' },
   { key:'expense',    label:'지출보고' },
+  { key:'payroll',    label:'급여관리' },
   { key:'invoices',   label:'세금계산서' },
   { key:'bank',       label:'통장거래' },
   { key:'match',      label:'입금매칭' },
@@ -3371,11 +3385,11 @@ const AUTH_MENUS = [
   { key:'settings',   label:'설정/백업' },
 ];
 const AUTH_ROLES_DEFAULT = [
-  { name:'관리자',    perms:{ contracts:'rw', invoices:'rw', bank:'rw', match:'rw', savings:'rw', dash:'rw', hr:'rw', auth:'rw', settings:'rw', equip:'rw', expense:'rw' } },
-  { name:'계약담당',  perms:{ contracts:'rw', invoices:'rw', bank:'r',  match:'r',  savings:'none', dash:'r', hr:'none', auth:'none', settings:'none', equip:'r', expense:'rw' } },
-  { name:'자금담당',  perms:{ contracts:'r',  invoices:'r',  bank:'rw', match:'rw', savings:'rw',  dash:'r', hr:'none', auth:'none', settings:'none', equip:'none', expense:'r' } },
-  { name:'일반직원',  perms:{ contracts:'r',  invoices:'r',  bank:'none',match:'none',savings:'none',dash:'r', hr:'none', auth:'none', settings:'none', equip:'r', expense:'rw' } },
-  { name:'열람전용',  perms:{ contracts:'r',  invoices:'r',  bank:'none',match:'none',savings:'none',dash:'r', hr:'none', auth:'none', settings:'none', equip:'r', expense:'r' } },
+  { name:'관리자',    perms:{ contracts:'rw', invoices:'rw', bank:'rw', match:'rw', savings:'rw', dash:'rw', hr:'rw', auth:'rw', settings:'rw', equip:'rw', expense:'rw', payroll:'rw' } },
+  { name:'계약담당',  perms:{ contracts:'rw', invoices:'rw', bank:'r',  match:'r',  savings:'none', dash:'r', hr:'none', auth:'none', settings:'none', equip:'r', expense:'rw', payroll:'none' } },
+  { name:'자금담당',  perms:{ contracts:'r',  invoices:'r',  bank:'rw', match:'rw', savings:'rw',  dash:'r', hr:'none', auth:'none', settings:'none', equip:'none', expense:'r', payroll:'rw' } },
+  { name:'일반직원',  perms:{ contracts:'r',  invoices:'r',  bank:'none',match:'none',savings:'none',dash:'r', hr:'none', auth:'none', settings:'none', equip:'r', expense:'rw', payroll:'none' } },
+  { name:'열람전용',  perms:{ contracts:'r',  invoices:'r',  bank:'none',match:'none',savings:'none',dash:'r', hr:'none', auth:'none', settings:'none', equip:'r', expense:'r', payroll:'none' } },
 ];
 
 function authInit(){
@@ -5471,6 +5485,231 @@ const Expense = {
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,'지출보고');
     XLSX.writeFile(wb,`엔자인_지출보고_${expFilter.year}_${todayStr()}.xlsx`);
+  }
+};
+</script>
+</body>
+<script>
+/* =====================================================
+   급여관리 (payroll)
+   State.payroll = [{id, ym, salary, insureEmp, insureComp, severance, memo}]
+   ym: 'YYYY-MM' 형식
+===================================================== */
+let payrollYear = String(new Date().getFullYear());
+
+Views.payroll = function(){
+  const allYears = [...new Set([
+    ...(State.payroll||[]).map(p=>p.ym.slice(0,4)),
+    String(new Date().getFullYear())
+  ])].sort().reverse();
+
+  document.getElementById('content').innerHTML = `
+    <div id="pay-kpis" style="display:grid;grid-template-columns:repeat(5,minmax(140px,1fr));gap:10px;margin-bottom:12px"></div>
+    <div class="toolbar sticky-toolbar">
+      <select onchange="payrollYear=this.value;Views.payroll()">
+        ${allYears.map(y=>`<option value="${y}" ${payrollYear===y?'selected':''}>${y}년</option>`).join('')}
+      </select>
+      <span class="sp"></span>
+      <button class="btn" onclick="Payroll.exportXlsx()">엑셀 내보내기</button>
+      <button class="btn pri" onclick="Payroll.edit()">+ 월 급여 등록</button>
+    </div>
+    <div id="pay-list" style="margin-top:4px"></div>`;
+  _renderPayroll();
+};
+
+function _renderPayroll(){
+  const list = (State.payroll||[])
+    .filter(p=>p.ym.slice(0,4)===payrollYear)
+    .sort((a,b)=>b.ym.localeCompare(a.ym));
+
+  // KPI 카드
+  const totSalary   = list.reduce((s,p)=>s+(Number(p.salary)||0),0);
+  const totInsEmp   = list.reduce((s,p)=>s+(Number(p.insureEmp)||0),0);
+  const totInsComp  = list.reduce((s,p)=>s+(Number(p.insureComp)||0),0);
+  const totSeverance= list.reduce((s,p)=>s+(Number(p.severance)||0),0);
+  const totAll      = totSalary+totInsComp+totSeverance;
+  const kpi = document.getElementById('pay-kpis');
+  if(kpi) kpi.innerHTML = `
+    <div class="kpi a"><div class="lb">${payrollYear}년 급여 합계</div><div class="vl">${fmt.money(totSalary)}<small> 원</small></div></div>
+    <div class="kpi b"><div class="lb">4대보험(직원부담) 합계</div><div class="vl">${fmt.money(totInsEmp)}<small> 원</small></div></div>
+    <div class="kpi e"><div class="lb">4대보험(회사부담) 합계</div><div class="vl">${fmt.money(totInsComp)}<small> 원</small></div></div>
+    <div class="kpi c"><div class="lb">퇴직금 합계</div><div class="vl">${fmt.money(totSeverance)}<small> 원</small></div></div>
+    <div class="kpi a"><div class="lb">총 인건비 (급여+회사부담+퇴직금)</div><div class="vl">${fmt.money(totAll)}<small> 원</small></div></div>`;
+
+  if(!list.length){
+    document.getElementById('pay-list').innerHTML =
+      `<div class="card"><div class="empty"><b>${payrollYear}년 급여 내역이 없습니다</b>우측 상단 [+ 월 급여 등록] 버튼으로 시작하세요</div></div>`;
+    return;
+  }
+
+  const rows = list.map(p=>{
+    const total = (Number(p.salary)||0)+(Number(p.insureComp)||0)+(Number(p.severance)||0);
+    return `<tr>
+      <td style="font-size:13px;font-weight:700">${esc(p.ym)}</td>
+      <td class="num">${fmt.money(Number(p.salary)||0)}</td>
+      <td class="num">${fmt.money(Number(p.insureEmp)||0)}</td>
+      <td class="num">${fmt.money(Number(p.insureComp)||0)}</td>
+      <td class="num">${fmt.money(Number(p.severance)||0)}</td>
+      <td class="num" style="font-weight:700;color:var(--brand)">${fmt.money(total)}</td>
+      <td style="font-size:12px;color:var(--ink3)">${esc(p.memo||'-')}</td>
+      <td class="ctr">
+        <button class="btn sm" onclick="Payroll.edit('${p.id}')">수정</button>
+        <button class="btn sm dgr" onclick="Payroll.del('${p.id}')">삭제</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // 합계 행
+  const sumTotal = totSalary+totInsComp+totSeverance;
+  const sumRow = `<tr style="border-top:2px solid var(--line);background:#f7f9f8;font-weight:800">
+    <td>합계</td>
+    <td class="num">${fmt.money(totSalary)}</td>
+    <td class="num">${fmt.money(totInsEmp)}</td>
+    <td class="num">${fmt.money(totInsComp)}</td>
+    <td class="num">${fmt.money(totSeverance)}</td>
+    <td class="num" style="color:var(--brand)">${fmt.money(sumTotal)}</td>
+    <td colspan="2"></td>
+  </tr>`;
+
+  document.getElementById('pay-list').innerHTML = `
+    <div class="card" style="margin:0"><div class="bd np tbl-wrap">
+      <table class="grid">
+        <thead><tr>
+          <th style="width:90px">연월</th>
+          <th class="num" style="width:130px">급여</th>
+          <th class="num" style="width:140px">4대보험(직원)</th>
+          <th class="num" style="width:140px">4대보험(회사)</th>
+          <th class="num" style="width:120px">퇴직금</th>
+          <th class="num" style="width:140px">총 인건비</th>
+          <th style="width:160px">비고</th>
+          <th class="ctr" style="width:100px">관리</th>
+        </tr></thead>
+        <tbody>${rows}${sumRow}</tbody>
+      </table>
+    </div></div>`;
+}
+
+const Payroll = {
+  edit(id){
+    const p = id ? (State.payroll||[]).find(x=>x.id===id) : null;
+    // 이미 등록된 연월 목록 (수정 시 본인 제외)
+    const usedYms = new Set((State.payroll||[]).filter(x=>x.id!==id).map(x=>x.ym));
+    const thisYear = new Date().getFullYear();
+    const thisMonth = new Date().getMonth()+1;
+    const defaultYm = p ? p.ym : `${thisYear}-${String(thisMonth).padStart(2,'0')}`;
+
+    const body = `
+      <div class="frm">
+        <div class="fld w2">
+          <label>연월 <span style="color:var(--red)">*</span></label>
+          <input type="month" id="pay-ym" value="${esc(defaultYm)}" style="width:180px">
+          <span id="pay-ym-warn" style="color:var(--red);font-size:12px;display:none">이미 등록된 연월입니다</span>
+        </div>
+        <div class="fld"><label>급여 <span style="color:var(--red)">*</span></label>
+          <input type="number" id="pay-salary" value="${p?p.salary:''}" placeholder="예: 15000000" min="0"></div>
+        <div class="fld"><label>4대보험 — 직원 부담</label>
+          <input type="number" id="pay-ins-emp" value="${p?p.insureEmp:''}" placeholder="예: 675000" min="0"></div>
+        <div class="fld"><label>4대보험 — 회사 부담</label>
+          <input type="number" id="pay-ins-comp" value="${p?p.insureComp:''}" placeholder="예: 720000" min="0"></div>
+        <div class="fld"><label>퇴직금 (충당)</label>
+          <input type="number" id="pay-severance" value="${p?p.severance:''}" placeholder="예: 1250000" min="0"></div>
+        <div class="fld w2">
+          <label style="font-size:12px;color:var(--ink2);font-weight:400;margin-top:4px;display:block">
+            총 인건비 (자동계산): 급여 + 4대보험(회사) + 퇴직금
+          </label>
+        </div>
+        <div class="fld w2"><label>비고</label>
+          <input id="pay-memo" value="${esc(p?p.memo||'':'')}"></div>
+      </div>`;
+
+    UI.openModal(p?`급여 수정 — ${p.ym}`:'월 급여 등록', body, [
+      {label:'취소', onClick:UI.closeModal},
+      {label:'저장', cls:'pri', onClick:()=>Payroll.save(id)}
+    ]);
+
+    // 연월 중복 체크
+    setTimeout(function(){
+      const ymInput = document.getElementById('pay-ym');
+      if(ymInput) ymInput.addEventListener('change', function(){
+        const warn = document.getElementById('pay-ym-warn');
+        if(warn) warn.style.display = usedYms.has(this.value) ? 'block' : 'none';
+      });
+    }, 100);
+  },
+
+  async save(id){
+    const g = i=>document.getElementById(i);
+    const ym = g('pay-ym').value;
+    const salary = Number(g('pay-salary').value)||0;
+    if(!ym){ toast('연월을 입력하세요'); return; }
+    if(!salary){ toast('급여를 입력하세요'); return; }
+    const usedYms = new Set((State.payroll||[]).filter(x=>x.id!==id).map(x=>x.ym));
+    if(usedYms.has(ym)){ toast('이미 등록된 연월입니다'); return; }
+
+    const data = {
+      ym, salary,
+      insureEmp:  Number(g('pay-ins-emp').value)||0,
+      insureComp: Number(g('pay-ins-comp').value)||0,
+      severance:  Number(g('pay-severance').value)||0,
+      memo: g('pay-memo').value.trim()
+    };
+    if(!State.payroll) State.payroll=[];
+    if(id){
+      const idx = State.payroll.findIndex(x=>x.id===id);
+      if(idx>=0) State.payroll[idx]={...State.payroll[idx],...data};
+    } else {
+      data.id = DB.uid(); State.payroll.push(data);
+    }
+    toast('저장 중...');
+    try{ await State.saveAll(); toast('✅ 저장 완료'); }
+    catch(err){ toast('❌ 저장 실패: '+err.message); return; }
+    UI.closeModal(); Views.payroll();
+  },
+
+  async del(id){
+    const p = (State.payroll||[]).find(x=>x.id===id);
+    if(!p||!confirm(`[${p.ym}] 급여 내역을 삭제할까요?`)) return;
+    State.payroll = State.payroll.filter(x=>x.id!==id);
+    try{
+      await supa.from('payroll').delete().eq('id',id);
+      await State.saveAll();
+      toast('✅ 삭제되었습니다');
+    }catch(err){ toast('❌ 삭제 실패'); return; }
+    Views.payroll();
+  },
+
+  exportXlsx(){
+    const list = (State.payroll||[])
+      .filter(p=>p.ym.slice(0,4)===payrollYear)
+      .sort((a,b)=>a.ym.localeCompare(b.ym));
+    if(!list.length){ toast('내보낼 데이터가 없습니다'); return; }
+
+    const rows = list.map(p=>({
+      '연월': p.ym,
+      '급여': Number(p.salary)||0,
+      '4대보험(직원)': Number(p.insureEmp)||0,
+      '4대보험(회사)': Number(p.insureComp)||0,
+      '퇴직금': Number(p.severance)||0,
+      '총인건비(급여+회사+퇴직금)': (Number(p.salary)||0)+(Number(p.insureComp)||0)+(Number(p.severance)||0),
+      '비고': p.memo||''
+    }));
+
+    // 합계 행 추가
+    rows.push({
+      '연월': '합계',
+      '급여': rows.reduce((s,r)=>s+r['급여'],0),
+      '4대보험(직원)': rows.reduce((s,r)=>s+r['4대보험(직원)'],0),
+      '4대보험(회사)': rows.reduce((s,r)=>s+r['4대보험(회사)'],0),
+      '퇴직금': rows.reduce((s,r)=>s+r['퇴직금'],0),
+      '총인건비(급여+회사+퇴직금)': rows.reduce((s,r)=>s+r['총인건비(급여+회사+퇴직금)'],0),
+      '비고': ''
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols']=[{wch:10},{wch:16},{wch:16},{wch:16},{wch:14},{wch:22},{wch:20}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '급여관리');
+    XLSX.writeFile(wb, `엔자인_급여관리_${payrollYear}_${todayStr()}.xlsx`);
   }
 };
 </script>
