@@ -2600,7 +2600,7 @@ const _conv={
   ediagFrom:function(r){return{id:r.id,contractId:r.contract_id,leader:r.leader,members:r.members||[],startDate:r.start_date,endDate:r.end_date,memo:r.memo,memberSchedules:r.member_schedules||{},files:r.files||{}};},
   equipTo:function(e){return{id:e.id,equip_name:e.equipName||'',equip_no:e.equipNo||'',sn:e.sn||'',calibration_history:e.calibrationHistory||'',purchase_year:e.purchaseYear||'',failure_history:e.failureHistory||'',memo:e.memo||'',holder_name:e.holderName||'',holder_since:e.holderSince||'',handover_history:e.handoverHistory||[],pending_handover_id:e.pendingHandoverId||null,pending_holder_name:e.pendingHolderName||null};},
   equipFrom:function(r){return{id:r.id,equipName:r.equip_name,equipNo:r.equip_no,sn:r.sn,calibrationHistory:r.calibration_history,purchaseYear:r.purchase_year,failureHistory:r.failure_history,memo:r.memo,holderName:r.holder_name||'',holderSince:r.holder_since||'',handoverHistory:r.handover_history||[],pendingHandoverId:r.pending_handover_id||null,pendingHolderName:r.pending_holder_name||null};},
-  payrollTo:function(p){return{id:p.id,ym:p.ym||'',salary:p.salary||0,insure_emp:p.insureEmp||0,insure_comp:p.insureComp||0,severance:p.severance||0,memo:p.memo||''};},
+  payrollTo:function(p){return{id:p.id,ym:p.ym||'',salary:p.salary||0,insure:p.insure||0,severance:p.severance||0,memo:p.memo||''};},
   payrollFrom:function(r){return{id:r.id,ym:r.ym||'',salary:r.salary||0,insureEmp:r.insure_emp||0,insureComp:r.insure_comp||0,severance:r.severance||0,memo:r.memo||''};},
   expenseTo:function(e){return{id:e.id,date:e.date||'',emp_name:e.empName||'',dept:e.dept||'',category:e.category||'',sub_category:e.subCategory||'',amount:e.amount||0,contract_id:e.contractId||null,receipt_note:e.receiptNote||'',memo:e.memo||'',status:e.status||'대기'};},
   expenseFrom:function(r){return{id:r.id,date:r.date||'',empName:r.emp_name||'',dept:r.dept||'',category:r.category||'',subCategory:r.sub_category||'',amount:r.amount||0,contractId:r.contract_id||null,receiptNote:r.receipt_note||'',memo:r.memo||'',status:r.status||'대기'};},
@@ -5531,9 +5531,8 @@ function _renderPayroll(){
   if(kpi) kpi.innerHTML = `
     <div class="kpi a"><div class="lb">${payrollYear}년 급여 합계</div><div class="vl">${fmt.money(totSalary)}<small> 원</small></div></div>
     <div class="kpi b"><div class="lb">4대보험 합계</div><div class="vl">${fmt.money(totInsEmp)}<small> 원</small></div></div>
-    <div class="kpi e">
     <div class="kpi c"><div class="lb">퇴직금 합계</div><div class="vl">${fmt.money(totSeverance)}<small> 원</small></div></div>
-    <div class="kpi a"><div class="lb">총 인건비 (급여+4대보험+퇴직금)</div><div class="vl">${fmt.money(totAll)}<small> 원</small></div></div>`;
+    <div class="kpi e"><div class="lb">총 인건비 (급여+4대보험+퇴직금)</div><div class="vl">${fmt.money(totAll)}<small> 원</small></div></div>`;
 
   if(!list.length){
     document.getElementById('pay-list').innerHTML =
