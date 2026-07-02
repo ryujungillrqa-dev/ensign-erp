@@ -189,6 +189,7 @@ table.dz td.num-ro{padding:6px 9px;text-align:right;font-variant-numeric:tabular
     <a href="#ediagmail" data-v="ediagmail"><span class="ic">📧</span>진단일정등록</a>
     <a href="#ediag" data-v="ediag"><span class="ic">⚡</span>에너지진단</a>
     <a href="#equip" data-v="equip"><span class="ic">🔧</span>진단장비현황</a>
+    <a href="#expense" data-v="expense"><span class="ic">💰</span>지출보고</a>
     <a href="#invoices" data-v="invoices"><span class="ic">🧾</span>세금계산서</a>
     <div class="grp">관리자</div>
     <a href="#dash" data-v="dash"><span class="ic">▦</span>대시보드</a>
@@ -234,12 +235,12 @@ const supa = window.supabase.createClient(SUPA_URL, SUPA_KEY);
 let _supaUser = null;
 let _supaProfile = null;
 const ROLE_MENUS = {
-  '관리자':    ['contracts','ediagmail','ediag','equip','invoices','dash','hr','auth','bank','match','savings','settings'],
-  '부관리자':  ['contracts','ediagmail','ediag','equip','invoices','dash','hr','auth','settings'],
-  '계약담당':  ['contracts','ediagmail','ediag','equip','invoices','dash'],
-  '진단팀장':  ['contracts','ediagmail','ediag','equip','invoices'],
-  '자금담당':  ['contracts','ediagmail','ediag','invoices','hr'],
-  '일반직원':  ['contracts','ediagmail','ediag','equip','invoices'],
+  '관리자':    ['contracts','ediagmail','ediag','equip','expense','invoices','dash','hr','auth','bank','match','savings','settings'],
+  '부관리자':  ['contracts','ediagmail','ediag','equip','expense','invoices','dash','hr','auth','settings'],
+  '계약담당':  ['contracts','ediagmail','ediag','equip','expense','invoices','dash'],
+  '진단팀장':  ['contracts','ediagmail','ediag','equip','expense','invoices'],
+  '자금담당':  ['contracts','ediagmail','ediag','expense','invoices','hr'],
+  '일반직원':  ['contracts','ediagmail','ediag','equip','expense','invoices'],
 };
 
 'use strict';
@@ -263,8 +264,9 @@ const State = {
   auth:      DB.read('auth', { roles:{}, users:{} }),
   ediag:     DB.read('ediag', []),   // [{id,contractId,leader,members,startDate,endDate,memo,files:{report:{name,size,data},review:{name,size,data}}}]       // {id, name, dept, position, rank, joinDate, status(재직/휴직/퇴직), birth, email, phone, memo}    // {id, name, bankName, monthly, start, maturity, payments:[{date,amount}], memo}
   equip:     DB.read('equip', []),   // [{id, equipName, equipNo, sn, calibrationHistory, purchaseYear, failureHistory, memo}]
+  expense:   DB.read('expense', []), // [{id, date, empName, dept, category, subCategory, amount, contractId, receiptNote, memo, status}]
   settings:  DB.read('settings', { company:'㈜엔자인', ceo:'', bizNo:'' }),
-  saveAll(){ DB.write('contracts',this.contracts); DB.write('invoices',this.invoices); DB.write('bank',this.bank); DB.write('savings',this.savings); DB.write('settings',this.settings); DB.write('hr',this.hr); DB.write('auth',this.auth); DB.write('ediag',this.ediag); DB.write('equip',this.equip); }
+  saveAll(){ DB.write('contracts',this.contracts); DB.write('invoices',this.invoices); DB.write('bank',this.bank); DB.write('savings',this.savings); DB.write('settings',this.settings); DB.write('hr',this.hr); DB.write('auth',this.auth); DB.write('ediag',this.ediag); DB.write('equip',this.equip); DB.write('expense',this.expense); }
 };
 
 /* ===== 도메인 상수 ===== */
@@ -354,6 +356,7 @@ const VIEW_META = {
   hr:{title:'인사관리', crumb:'임직원 정보 · 직급 · 재직현황'},
   auth:{title:'권한관리', crumb:'메뉴별 접근 권한 · 직급별 설정'},
   equip:{title:'진단장비현황', crumb:'에너지진단 장비 · 검교정 · 고장이력 관리'},
+  expense:{title:'지출보고', crumb:'직원별 · 본부별 · 구분별 지출 관리'},
   ediag:{title:'에너지진단', crumb:'에너지진단팀 계약 · 진단팀 구성 관리'},
   ediagmail:{title:'진단일정등록', crumb:'에너지진단 일정 등록 · 팀장 메일 발송'}
 };
@@ -2594,6 +2597,8 @@ const _conv={
   ediagFrom:function(r){return{id:r.id,contractId:r.contract_id,leader:r.leader,members:r.members||[],startDate:r.start_date,endDate:r.end_date,memo:r.memo,memberSchedules:r.member_schedules||{},files:r.files||{}};},
   equipTo:function(e){return{id:e.id,equip_name:e.equipName||'',equip_no:e.equipNo||'',sn:e.sn||'',calibration_history:e.calibrationHistory||'',purchase_year:e.purchaseYear||'',failure_history:e.failureHistory||'',memo:e.memo||'',holder_name:e.holderName||'',holder_since:e.holderSince||'',handover_history:e.handoverHistory||[],pending_handover_id:e.pendingHandoverId||null,pending_holder_name:e.pendingHolderName||null};},
   equipFrom:function(r){return{id:r.id,equipName:r.equip_name,equipNo:r.equip_no,sn:r.sn,calibrationHistory:r.calibration_history,purchaseYear:r.purchase_year,failureHistory:r.failure_history,memo:r.memo,holderName:r.holder_name||'',holderSince:r.holder_since||'',handoverHistory:r.handover_history||[],pendingHandoverId:r.pending_handover_id||null,pendingHolderName:r.pending_holder_name||null};},
+  expenseTo:function(e){return{id:e.id,date:e.date||'',emp_name:e.empName||'',dept:e.dept||'',category:e.category||'',sub_category:e.subCategory||'',amount:e.amount||0,contract_id:e.contractId||null,receipt_note:e.receiptNote||'',memo:e.memo||'',status:e.status||'대기'};},
+  expenseFrom:function(r){return{id:r.id,date:r.date||'',empName:r.emp_name||'',dept:r.dept||'',category:r.category||'',subCategory:r.sub_category||'',amount:r.amount||0,contractId:r.contract_id||null,receiptNote:r.receipt_note||'',memo:r.memo||'',status:r.status||'대기'};},
 };
 
 async function supaLoadAll(){
@@ -2607,6 +2612,7 @@ async function supaLoadAll(){
       supa.from('ediag').select('*'),
       supa.from('auth_settings').select('*').eq('id',1).maybeSingle(),
       supa.from('equip').select('*'),
+      supa.from('expense').select('*').order('date',{ascending:false}),
     ]);
     State.contracts=(results[0].data||[]).map(_conv.ctFrom);
     State.invoices=(results[1].data||[]).map(_conv.invFrom);
@@ -2616,6 +2622,7 @@ async function supaLoadAll(){
     State.ediag=(results[5].data||[]).map(_conv.ediagFrom);
     State.auth=results[6].data?{roles:results[6].data.roles||{},users:results[6].data.users||{}}:{roles:{},users:{}};
     State.equip=(results[7].data||[]).map(_conv.equipFrom);
+    State.expense=(results[8].data||[]).map(_conv.expenseFrom);
     // 팀 기반 필터링 적용
     applyTeamFilter();
   }catch(e){console.error('로드 오류:',e);}
@@ -2672,6 +2679,7 @@ State.saveAll=async function(){
     if(State.invoices.length){  jobs.push(supa.from('invoices').upsert(State.invoices.map(_conv.invTo)));  labels.push('invoices'); }
     if(State.ediag.length){     jobs.push(supa.from('ediag').upsert(State.ediag.map(_conv.ediagTo)));      labels.push('ediag'); }
     if(State.equip.length){     jobs.push(supa.from('equip').upsert(State.equip.map(_conv.equipTo)));      labels.push('equip'); }
+    if(State.expense.length){   jobs.push(supa.from('expense').upsert(State.expense.map(_conv.expenseTo)));  labels.push('expense'); }
     // 메모리(State)에서 삭제된 행이 Supabase에 남아있지 않도록 명시적으로 제거
     // (팀 필터링 대상 사용자는 본인이 못 보는 데이터를 건드릴 수 없으므로 제외)
     if(!isFiltered){
@@ -2696,6 +2704,11 @@ State.saveAll=async function(){
         var dbEquipRes = await supa.from('equip').select('id');
         var orphanEquipIds = (dbEquipRes.data||[]).map(function(r){return r.id;}).filter(function(id){return !liveEquipIds.has(id);});
         if(orphanEquipIds.length) jobs.push(supa.from('equip').delete().in('id', orphanEquipIds));
+
+        var liveExpIds = new Set(State.expense.map(function(e){return e.id;}));
+        var dbExpRes = await supa.from('expense').select('id');
+        var orphanExpIds = (dbExpRes.data||[]).map(function(r){return r.id;}).filter(function(id){return !liveExpIds.has(id);});
+        if(orphanExpIds.length) jobs.push(supa.from('expense').delete().in('id', orphanExpIds));
       }catch(e){ console.error('고아행 정리 오류:', e); }
     }
     if(!isFiltered){
@@ -3347,6 +3360,7 @@ const AUTH_MENUS = [
   { key:'ediagmail',  label:'진단일정등록' },
   { key:'ediag',      label:'에너지진단' },
   { key:'equip',      label:'진단장비현황' },
+  { key:'expense',    label:'지출보고' },
   { key:'invoices',   label:'세금계산서' },
   { key:'bank',       label:'통장거래' },
   { key:'match',      label:'입금매칭' },
@@ -3357,11 +3371,11 @@ const AUTH_MENUS = [
   { key:'settings',   label:'설정/백업' },
 ];
 const AUTH_ROLES_DEFAULT = [
-  { name:'관리자',    perms:{ contracts:'rw', invoices:'rw', bank:'rw', match:'rw', savings:'rw', dash:'rw', hr:'rw', auth:'rw', settings:'rw', equip:'rw' } },
-  { name:'계약담당',  perms:{ contracts:'rw', invoices:'rw', bank:'r',  match:'r',  savings:'none', dash:'r', hr:'none', auth:'none', settings:'none', equip:'r' } },
-  { name:'자금담당',  perms:{ contracts:'r',  invoices:'r',  bank:'rw', match:'rw', savings:'rw',  dash:'r', hr:'none', auth:'none', settings:'none', equip:'none' } },
-  { name:'일반직원',  perms:{ contracts:'r',  invoices:'r',  bank:'none',match:'none',savings:'none',dash:'r', hr:'none', auth:'none', settings:'none', equip:'r' } },
-  { name:'열람전용',  perms:{ contracts:'r',  invoices:'r',  bank:'none',match:'none',savings:'none',dash:'r', hr:'none', auth:'none', settings:'none', equip:'r' } },
+  { name:'관리자',    perms:{ contracts:'rw', invoices:'rw', bank:'rw', match:'rw', savings:'rw', dash:'rw', hr:'rw', auth:'rw', settings:'rw', equip:'rw', expense:'rw' } },
+  { name:'계약담당',  perms:{ contracts:'rw', invoices:'rw', bank:'r',  match:'r',  savings:'none', dash:'r', hr:'none', auth:'none', settings:'none', equip:'r', expense:'rw' } },
+  { name:'자금담당',  perms:{ contracts:'r',  invoices:'r',  bank:'rw', match:'rw', savings:'rw',  dash:'r', hr:'none', auth:'none', settings:'none', equip:'none', expense:'r' } },
+  { name:'일반직원',  perms:{ contracts:'r',  invoices:'r',  bank:'none',match:'none',savings:'none',dash:'r', hr:'none', auth:'none', settings:'none', equip:'r', expense:'rw' } },
+  { name:'열람전용',  perms:{ contracts:'r',  invoices:'r',  bank:'none',match:'none',savings:'none',dash:'r', hr:'none', auth:'none', settings:'none', equip:'r', expense:'r' } },
 ];
 
 function authInit(){
@@ -5081,6 +5095,368 @@ const Equip = {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '진단장비현황');
     XLSX.writeFile(wb, `엔자인_진단장비현황_${todayStr()}.xlsx`);
+  }
+};
+</script>
+</body>
+<script>
+/* =====================================================
+   지출보고 (expense)
+   State.expense = [{id, date, empName, dept, category, subCategory,
+                     amount, contractId, receiptNote, memo, status}]
+   status: '대기' | '승인' | '반려'
+===================================================== */
+const EXP_CATS = {
+  '숙박': [],
+  '식대': [],
+  '장비': [],
+  '차량': ['주유','유지관리','기타'],
+  '기타': []
+};
+const EXP_CAT_ICON = {'숙박':'🏨','식대':'🍽️','장비':'🔧','차량':'🚗','기타':'📋'};
+
+let expFilter = { q:'', dept:'', category:'', status:'', dateFrom:'', dateTo:'',
+  year: String(new Date().getFullYear()) };
+
+Views.expense = function(){
+  const years = [...new Set((State.expense||[]).map(e=>e.date.slice(0,4)))].sort().reverse();
+  if(years.length && !years.includes(expFilter.year)) expFilter.year = years[0];
+  const allYears = [...new Set([...years, String(new Date().getFullYear())])].sort().reverse();
+  const depts = [...new Set((State.hr||[]).map(h=>h.dept||'').filter(Boolean))].sort();
+
+  document.getElementById('content').innerHTML = `
+    <div id="exp-kpis" style="display:grid;grid-template-columns:repeat(5,minmax(130px,1fr));gap:10px;margin-bottom:12px"></div>
+    <div class="toolbar sticky-toolbar">
+      <select onchange="expFilter.year=this.value;Views.expense()">
+        ${allYears.map(y=>`<option value="${y}" ${expFilter.year===y?'selected':''}>${y}년</option>`).join('')}
+      </select>
+      <select onchange="expFilter.dept=this.value;_renderExpense()">
+        <option value="">전체 본부</option>
+        ${depts.map(d=>`<option value="${d}" ${expFilter.dept===d?'selected':''}>${esc(d)}</option>`).join('')}
+      </select>
+      <select onchange="expFilter.category=this.value;_renderExpense()">
+        <option value="">전체 구분</option>
+        ${Object.keys(EXP_CATS).map(c=>`<option value="${c}" ${expFilter.category===c?'selected':''}>${EXP_CAT_ICON[c]} ${c}</option>`).join('')}
+      </select>
+      <select onchange="expFilter.status=this.value;_renderExpense()">
+        <option value="">전체 상태</option>
+        <option value="대기" ${expFilter.status==='대기'?'selected':''}>⏳ 대기</option>
+        <option value="승인" ${expFilter.status==='승인'?'selected':''}>✅ 승인</option>
+        <option value="반려" ${expFilter.status==='반려'?'selected':''}>❌ 반려</option>
+      </select>
+      <input type="search" id="exp-search" placeholder="직원명·비고 검색"
+        value="${esc(expFilter.q)}" oninput="expFilter.q=this.value;_renderExpense()" style="width:180px">
+      <span class="sp"></span>
+      <span id="exp-summary" style="font-size:12.5px;color:var(--ink2)"></span>
+      <button class="btn" onclick="Expense.template()">업로드 양식</button>
+      <label class="btn">엑셀 일괄등록<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="Expense.importXlsx(this)"></label>
+      <button class="btn" onclick="Expense.exportXlsx()">엑셀 내보내기</button>
+      <button class="btn pri" onclick="Expense.edit()">+ 지출 등록</button>
+    </div>
+    <div id="exp-list" style="margin-top:4px"></div>`;
+  _renderExpense();
+};
+
+function _expRows(){
+  return (State.expense||[]).filter(e=>{
+    if(expFilter.year && e.date.slice(0,4)!==expFilter.year) return false;
+    if(expFilter.dept && e.dept!==expFilter.dept) return false;
+    if(expFilter.category && e.category!==expFilter.category) return false;
+    if(expFilter.status && e.status!==expFilter.status) return false;
+    if(expFilter.q){
+      const q=expFilter.q.toLowerCase();
+      if(!((e.empName||'')+(e.memo||'')+(e.receiptNote||'')).toLowerCase().includes(q)) return false;
+    }
+    return true;
+  }).sort((a,b)=>b.date.localeCompare(a.date));
+}
+
+function _renderExpense(){
+  const list = _expRows();
+  const totalAmt = list.reduce((s,e)=>s+(Number(e.amount)||0),0);
+  const approvedAmt = list.filter(e=>e.status==='승인').reduce((s,e)=>s+(Number(e.amount)||0),0);
+  const pendingCnt = list.filter(e=>e.status==='대기').length;
+
+  // KPI 카드
+  const catAmts = {};
+  Object.keys(EXP_CATS).forEach(c=>{ catAmts[c]=0; });
+  list.forEach(e=>{ if(catAmts[e.category]!=null) catAmts[e.category]+=(Number(e.amount)||0); });
+  const kpi = document.getElementById('exp-kpis');
+  if(kpi){
+    kpi.innerHTML = `
+      <div class="kpi a"><div class="lb">${expFilter.year}년 지출건수</div><div class="vl">${list.length}<small> 건</small></div></div>
+      <div class="kpi b"><div class="lb">${expFilter.year}년 총지출</div><div class="vl">${fmt.money(totalAmt)}<small> 원</small></div></div>
+      <div class="kpi e"><div class="lb">승인 금액</div><div class="vl">${fmt.money(approvedAmt)}<small> 원</small></div></div>
+      <div class="kpi c"><div class="lb">승인 대기</div><div class="vl" style="color:${pendingCnt?'var(--red)':'inherit'}">${pendingCnt}<small> 건</small></div></div>
+      <div class="kpi a"><div class="lb">구분별 최다</div><div class="vl" style="font-size:13px">${Object.entries(catAmts).sort((a,b)=>b[1]-a[1])[0]?.[0]||'-'}<small> ${fmt.money(Math.max(...Object.values(catAmts)))}원</small></div></div>`;
+  }
+
+  const sm = document.getElementById('exp-summary');
+  if(sm) sm.textContent = `${list.length}건 · ${fmt.money(totalAmt)}원`;
+
+  if(!list.length){
+    document.getElementById('exp-list').innerHTML =
+      `<div class="card"><div class="empty"><b>지출 내역이 없습니다</b>우측 상단 [+ 지출 등록] 버튼으로 시작하세요</div></div>`;
+    return;
+  }
+
+  const isAdmin = _supaProfile?.role==='관리자'||_supaProfile?.role==='부관리자';
+  const rows = list.map(e=>{
+    const c = e.contractId ? State.contracts.find(x=>x.id===e.contractId) : null;
+    const catLabel = EXP_CAT_ICON[e.category]||'' + e.category + (e.subCategory?' · '+e.subCategory:'');
+    const statusTag = e.status==='승인'
+      ? '<span class="tag t2">✅ 승인</span>'
+      : e.status==='반려'
+      ? '<span class="tag" style="background:#ffebee;color:#c62828">❌ 반려</span>'
+      : '<span class="tag t4">⏳ 대기</span>';
+    const adminBtns = isAdmin && e.status==='대기'
+      ? `<button class="btn sm" style="background:#e8f5e9;border-color:#a5d6a7;color:#2e7d32" onclick="Expense.approve('${e.id}')">승인</button>
+         <button class="btn sm" style="background:#ffebee;border-color:#ef9a9a;color:#c62828" onclick="Expense.reject('${e.id}')">반려</button>`
+      : '';
+    return `<tr>
+      <td style="font-size:12px">${esc(e.date)}</td>
+      <td><b>${esc(e.empName||'')}</b></td>
+      <td style="font-size:12px;color:var(--ink2)">${esc(e.dept||'-')}</td>
+      <td>${EXP_CAT_ICON[e.category]||''} ${esc(e.category||'')}${e.subCategory?' <span style="color:var(--ink3);font-size:11px">·'+esc(e.subCategory)+'</span>':''}</td>
+      <td class="num"><b>${fmt.money(Number(e.amount)||0)}</b></td>
+      <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c?c.no+' '+c.name:'')}">${c?esc(c.no):'-'}</td>
+      <td style="font-size:12px;color:var(--ink2);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.receiptNote||'')}">${esc(e.receiptNote||'-')}</td>
+      <td style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.memo||'')}">${esc(e.memo||'-')}</td>
+      <td class="ctr">${statusTag}</td>
+      <td class="ctr">
+        ${adminBtns}
+        <button class="btn sm" onclick="Expense.edit('${e.id}')">수정</button>
+        <button class="btn sm dgr" onclick="Expense.del('${e.id}')">삭제</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('exp-list').innerHTML = `
+    <div class="card" style="margin:0"><div class="bd np tbl-wrap">
+      <table class="grid">
+        <thead><tr>
+          <th style="width:90px">날짜</th>
+          <th style="width:80px">직원</th>
+          <th style="width:90px">본부</th>
+          <th style="width:130px">사용구분</th>
+          <th class="num" style="width:100px">금액(원)</th>
+          <th style="width:90px">계약연결</th>
+          <th style="width:120px">영수증</th>
+          <th style="width:140px">비고</th>
+          <th class="ctr" style="width:70px">상태</th>
+          <th class="ctr" style="width:160px">관리</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div></div>`;
+}
+
+const Expense = {
+  edit(id){
+    const e = id ? (State.expense||[]).find(x=>x.id===id) : null;
+    const staff = (State.hr||[]).filter(h=>h.status==='재직'||!h.status).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    const ctOpts = [['','(계약 연결 없음)'], ...(State.contracts||[])
+      .sort((a,b)=>b.no.localeCompare(a.no))
+      .map(c=>[c.id, `[${c.no}] ${c.name} (${c.client})`])];
+    const today = todayStr();
+    const catSel = e?.category||'';
+    const subOpts = (EXP_CATS[catSel]||[]).map(s=>
+      `<option value="${s}" ${e?.subCategory===s?'selected':''}>${s}</option>`).join('');
+
+    const body = `
+      <div class="frm">
+        <div class="fld"><label>날짜 <span style="color:var(--red)">*</span></label>
+          <input type="date" id="ep-date" value="${esc(e?e.date:today)}"></div>
+        <div class="fld"><label>직원 <span style="color:var(--red)">*</span></label>
+          <select id="ep-emp" onchange="Expense._onEmpChange(this)">
+            <option value="">선택</option>
+            ${staff.map(h=>`<option value="${h.name}" data-dept="${esc(h.dept||'')}" ${e?.empName===h.name?'selected':''}>${esc(h.name)} (${esc(h.dept||'')})</option>`).join('')}
+          </select></div>
+        <div class="fld"><label>본부</label>
+          <input id="ep-dept" value="${esc(e?e.dept||'':'')}" readonly style="background:#f5f5f5"></div>
+        <div class="fld"><label>사용구분 <span style="color:var(--red)">*</span></label>
+          <select id="ep-cat" onchange="Expense._onCatChange(this)">
+            <option value="">선택</option>
+            ${Object.keys(EXP_CATS).map(c=>`<option value="${c}" ${e?.category===c?'selected':''}>${EXP_CAT_ICON[c]} ${c}</option>`).join('')}
+          </select></div>
+        <div class="fld" id="ep-subcat-wrap" style="${EXP_CATS[catSel]?.length?'':'display:none'}">
+          <label>세부구분</label>
+          <select id="ep-subcat">
+            <option value="">-</option>
+            ${subOpts}
+          </select></div>
+        <div class="fld"><label>금액(원) <span style="color:var(--red)">*</span></label>
+          <input type="number" id="ep-amount" value="${e?e.amount:''}" placeholder="예: 50000" min="0"></div>
+        <div class="fld w2"><label>계약 연결 (선택)</label>
+          <select id="ep-contract">
+            ${ctOpts.map(([v,l])=>`<option value="${v}" ${e?.contractId===v?'selected':''}>${esc(l)}</option>`).join('')}
+          </select></div>
+        <div class="fld"><label>영수증 (파일명/메모)</label>
+          <input id="ep-receipt" value="${esc(e?e.receiptNote||'':'')}" placeholder="예: 영수증_20260315.jpg"></div>
+        <div class="fld"><label>비고</label>
+          <input id="ep-memo" value="${esc(e?e.memo||'':'')}"></div>
+      </div>`;
+    UI.openModal(e?'지출 수정':'지출 등록', body, [
+      {label:'취소', onClick:UI.closeModal},
+      {label:'저장', cls:'pri', onClick:()=>Expense.save(id)}
+    ]);
+  },
+  _onEmpChange(sel){
+    const opt = sel.options[sel.selectedIndex];
+    const dept = opt?.getAttribute('data-dept')||'';
+    document.getElementById('ep-dept').value = dept;
+  },
+  _onCatChange(sel){
+    const subs = EXP_CATS[sel.value]||[];
+    const wrap = document.getElementById('ep-subcat-wrap');
+    const subSel = document.getElementById('ep-subcat');
+    wrap.style.display = subs.length ? '' : 'none';
+    subSel.innerHTML = '<option value="">-</option>' + subs.map(s=>`<option value="${s}">${s}</option>`).join('');
+  },
+  async save(id){
+    const g = i=>document.getElementById(i);
+    const date = g('ep-date').value;
+    const empName = g('ep-emp').value;
+    const category = g('ep-cat').value;
+    const amount = Number(g('ep-amount').value)||0;
+    if(!date){ toast('날짜를 입력하세요'); return; }
+    if(!empName){ toast('직원을 선택하세요'); return; }
+    if(!category){ toast('사용구분을 선택하세요'); return; }
+    if(!amount){ toast('금액을 입력하세요'); return; }
+    const data = {
+      date, empName, dept: g('ep-dept').value,
+      category, subCategory: g('ep-subcat')?.value||'',
+      amount, contractId: g('ep-contract').value||null,
+      receiptNote: g('ep-receipt').value.trim(),
+      memo: g('ep-memo').value.trim(),
+      status: id ? ((State.expense||[]).find(x=>x.id===id)?.status||'대기') : '대기'
+    };
+    if(!State.expense) State.expense=[];
+    if(id){
+      const idx = State.expense.findIndex(x=>x.id===id);
+      if(idx>=0) State.expense[idx]={...State.expense[idx],...data};
+    } else {
+      data.id = DB.uid(); State.expense.push(data);
+    }
+    toast('저장 중...');
+    try{ await State.saveAll(); toast('✅ 저장 완료'); }
+    catch(err){ toast('❌ 저장 실패: '+err.message); return; }
+    UI.closeModal(); Views.expense();
+  },
+  async del(id){
+    const e = (State.expense||[]).find(x=>x.id===id);
+    if(!e||!confirm(`[${e.date}] ${e.empName} ${e.category} ${fmt.money(e.amount)}원 지출 내역을 삭제할까요?`)) return;
+    State.expense = State.expense.filter(x=>x.id!==id);
+    toast('삭제 중...');
+    try{ await supa.from('expense').delete().eq('id',id); await State.saveAll(); toast('✅ 삭제되었습니다'); }
+    catch(err){ toast('❌ 삭제 실패'); return; }
+    Views.expense();
+  },
+  async approve(id){
+    const e = (State.expense||[]).find(x=>x.id===id);
+    if(!e) return;
+    if(!confirm(`[${e.empName}] ${e.category} ${fmt.money(e.amount)}원 지출을 승인하시겠습니까?`)) return;
+    e.status='승인';
+    try{ await State.saveAll(); toast('✅ 승인되었습니다'); _renderExpense(); }
+    catch(err){ toast('❌ 실패: '+err.message); }
+  },
+  async reject(id){
+    const e = (State.expense||[]).find(x=>x.id===id);
+    if(!e) return;
+    const reason = prompt('반려 사유를 입력하세요 (비고에 기록됩니다)');
+    if(reason===null) return;
+    e.status='반려'; if(reason) e.memo=(e.memo?e.memo+' / ':'')+`[반려: ${reason}]`;
+    try{ await State.saveAll(); toast('❌ 반려 처리되었습니다'); _renderExpense(); }
+    catch(err){ toast('❌ 실패: '+err.message); }
+  },
+  template(){
+    const sample=[{
+      '날짜':'2026-03-15','직원명':'홍길동','본부':'에너지진단팀',
+      '사용구분':'식대','세부구분':'','금액':35000,
+      '계약번호':'','영수증':'영수증_20260315.jpg','비고':'현장방문 식사','상태':'대기'
+    }];
+    const guide = XLSX.utils.aoa_to_sheet([
+      ['엔자인 ERP 지출보고 일괄등록 양식'],[''],
+      ['열','설명'],
+      ['날짜','YYYY-MM-DD 형식. 예: 2026-03-15'],
+      ['직원명','인사관리에 등록된 정확한 이름'],
+      ['본부','자동 조회되나 직접 입력도 가능'],
+      ['사용구분','숙박 / 식대 / 장비 / 차량 / 기타'],
+      ['세부구분','차량일 경우: 주유 / 유지관리 / 기타'],
+      ['금액','숫자만 입력 (원 단위)'],
+      ['계약번호','선택 입력. 계약관리의 계약번호'],
+      ['영수증','파일명 또는 메모'],
+      ['비고','선택 입력'],
+      ['상태','비워두면 "대기"로 등록됨'],
+    ]);
+    guide['!cols']=[{wch:12},{wch:60}];
+    const ws = XLSX.utils.json_to_sheet(sample);
+    ws['!cols']=[{wch:12},{wch:10},{wch:14},{wch:8},{wch:8},{wch:10},{wch:12},{wch:20},{wch:20},{wch:8}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'지출입력');
+    XLSX.utils.book_append_sheet(wb,guide,'작성안내');
+    XLSX.writeFile(wb,'엔자인_지출보고등록양식.xlsx');
+  },
+  importXlsx(input){
+    const file=input.files[0]; if(!file) return;
+    const reader=new FileReader();
+    reader.onload=async e=>{
+      try{
+        const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+        const sheetName=wb.SheetNames.includes('지출입력')?'지출입력':wb.SheetNames[0];
+        const json=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{defval:''});
+        if(!State.expense) State.expense=[];
+        let ok=0,skip=0;
+        json.forEach(r=>{
+          const get=names=>{const k=Object.keys(r).find(k=>names.some(n=>k.replace(/\s/g,'').includes(n)));return k!=null?String(r[k]||'').trim():''};
+          const date=get(['날짜','일자','date']);
+          const empName=get(['직원명','직원','이름','name']);
+          const category=get(['사용구분','구분','category']);
+          const amount=Number(String(get(['금액','amount'])).replace(/,/g,''))||0;
+          if(!date||!empName||!category||!amount){skip++;return;}
+          // 계약번호로 contractId 조회
+          const ctNo=get(['계약번호','계약']);
+          const ct=ctNo?(State.contracts||[]).find(c=>c.no===ctNo):null;
+          // 직원 본부 자동 조회
+          const hrMatch=(State.hr||[]).find(h=>h.name===empName);
+          const data={
+            id:DB.uid(), date, empName,
+            dept:get(['본부','부서'])||hrMatch?.dept||'',
+            category, subCategory:get(['세부구분','세부']),
+            amount, contractId:ct?ct.id:null,
+            receiptNote:get(['영수증']),
+            memo:get(['비고','메모']),
+            status:get(['상태'])||'대기'
+          };
+          State.expense.push(data); ok++;
+        });
+        if(!ok){toast('처리할 데이터가 없습니다');input.value='';return;}
+        toast('저장 중...');
+        try{await State.saveAll();toast('✅ '+ok+'건 등록 완료'+(skip?' · 건너뜀 '+skip+'건':''));Views.expense();}
+        catch(err){toast('❌ 저장 실패: '+err.message);}
+      }catch(err){toast('가져오기 실패: 파일 형식을 확인하세요');console.error(err);}
+      input.value='';
+    };
+    reader.readAsArrayBuffer(file);
+  },
+  exportXlsx(){
+    const list=_expRows();
+    if(!list.length){toast('내보낼 데이터가 없습니다');return;}
+    const rows=list.map(e=>{
+      const c=e.contractId?(State.contracts||[]).find(x=>x.id===e.contractId):null;
+      return{
+        '날짜':e.date,'직원명':e.empName||'','본부':e.dept||'',
+        '사용구분':e.category||'','세부구분':e.subCategory||'',
+        '금액':Number(e.amount)||0,'계약번호':c?c.no:'',
+        '계약명':c?c.name:'','영수증':e.receiptNote||'',
+        '비고':e.memo||'','상태':e.status||''
+      };
+    });
+    const ws=XLSX.utils.json_to_sheet(rows);
+    ws['!cols']=[{wch:12},{wch:10},{wch:14},{wch:8},{wch:8},{wch:12},{wch:12},{wch:24},{wch:20},{wch:20},{wch:6}];
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'지출보고');
+    XLSX.writeFile(wb,`엔자인_지출보고_${expFilter.year}_${todayStr()}.xlsx`);
   }
 };
 </script>
