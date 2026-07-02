@@ -189,8 +189,8 @@ table.dz td.num-ro{padding:6px 9px;text-align:right;font-variant-numeric:tabular
     <a href="#ediagmail" data-v="ediagmail"><span class="ic">📧</span>진단일정등록</a>
     <a href="#ediag" data-v="ediag"><span class="ic">⚡</span>에너지진단</a>
     <a href="#equip" data-v="equip"><span class="ic">🔧</span>진단장비현황</a>
-    <a href="#expense" data-v="expense"><span class="ic">💰</span>지출보고</a>
     <a href="#invoices" data-v="invoices"><span class="ic">🧾</span>세금계산서</a>
+    <a href="#expense" data-v="expense"><span class="ic">💰</span>지출보고</a>
     <a href="#payroll" data-v="payroll"><span class="ic">💵</span>급여관리</a>
     <div class="grp">관리자</div>
     <a href="#dash" data-v="dash"><span class="ic">▦</span>대시보드</a>
@@ -5530,9 +5530,9 @@ function _renderPayroll(){
   const kpi = document.getElementById('pay-kpis');
   if(kpi) kpi.innerHTML = `
     <div class="kpi a"><div class="lb">${payrollYear}년 급여 합계</div><div class="vl">${fmt.money(totSalary)}<small> 원</small></div></div>
+    <div class="kpi c"><div class="lb">퇴직금 합계</div><div class="vl">${fmt.money(totSeverance)}<small> 원</small></div></div>
     <div class="kpi b"><div class="lb">4대보험 합계</div><div class="vl">${fmt.money(totInsEmp)}<small> 원</small></div></div>
-    <div class="kpi c" style="border-left:3px solid var(--line2);margin-left:8px;padding-left:18px"><div class="lb">퇴직금 합계</div><div class="vl">${fmt.money(totSeverance)}<small> 원</small></div></div>
-    <div class="kpi e"><div class="lb">총 인건비 (급여 + 4대보험 + 퇴직금)</div><div class="vl">${fmt.money(totAll)}<small> 원</small></div></div>`;
+    <div class="kpi e"><div class="lb">총 인건비 (급여+퇴직금+4대보험)</div><div class="vl">${fmt.money(totAll)}<small> 원</small></div></div>`;
 
   if(!list.length){
     document.getElementById('pay-list').innerHTML =
