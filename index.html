@@ -5571,11 +5571,13 @@ const EXP_CATS = {
   '식대': [],
   '주유비': [],
   '차량유지': [],
+  '복리후생': [],
+  '수수료': [],
   '장비': [],
   '자문&용역': [],
   '기타': []
 };
-const EXP_CAT_ICON = {'숙박':'🏨','식대':'🍽️','주유비':'⛽','차량유지':'🚗','장비':'🔧','자문&용역':'📝','기타':'📋'};
+const EXP_CAT_ICON = {'숙박':'🏨','식대':'🍽️','주유비':'⛽','차량유지':'🚗','복리후생':'🎁','수수료':'💳','장비':'🔧','자문&용역':'📝','기타':'📋'};
 
 let expFilter = { q:'', dept:'', category:'', status:'', dateFrom:'', dateTo:'',
   year: String(new Date().getFullYear()) };
@@ -5593,15 +5595,15 @@ Views.expense = function(){
         ${allYears.map(y=>`<option value="${y}" ${expFilter.year===y?'selected':''}>${y}년</option>`).join('')}
       </select>
       <select onchange="expFilter.dept=this.value;_renderExpense()">
-        <option value="">전체 본부</option>
+        <option value="">사업본부</option>
         ${depts.map(d=>`<option value="${d}" ${expFilter.dept===d?'selected':''}>${esc(d)}</option>`).join('')}
       </select>
       <select onchange="expFilter.category=this.value;_renderExpense()">
-        <option value="">전체 구분</option>
+        <option value="">사용구분</option>
         ${Object.keys(EXP_CATS).map(c=>`<option value="${c}" ${expFilter.category===c?'selected':''}>${EXP_CAT_ICON[c]} ${c}</option>`).join('')}
       </select>
       <select onchange="expFilter.status=this.value;_renderExpense()">
-        <option value="">전체 상태</option>
+        <option value="">승인확인</option>
         <option value="대기" ${expFilter.status==='대기'?'selected':''}>⏳ 대기</option>
         <option value="승인" ${expFilter.status==='승인'?'selected':''}>✅ 승인</option>
         <option value="반려" ${expFilter.status==='반려'?'selected':''}>❌ 반려</option>
