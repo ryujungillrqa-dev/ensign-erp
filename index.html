@@ -6021,35 +6021,77 @@ const Expense = {
     const reader=new FileReader();
     reader.onload=async e=>{
       try{
-        const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+        // cellDates:false 로 날짜를 숫자(시리얼)로 받아 직접 변환 (Date 객체 문자열 변환 방지)
+        const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:false});
         const sheetName=wb.SheetNames.includes('지출입력')?'지출입력':wb.SheetNames[0];
-        const json=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{defval:''});
+        const json=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{defval:'',raw:false});
         if(!State.expense) State.expense=[];
         let ok=0,skip=0;
+        const newItems=[];
         json.forEach(r=>{
-          const get=names=>{const k=Object.keys(r).find(k=>names.some(n=>k.replace(/\s/g,'').includes(n)));return k!=null?String(r[k]||'').trim():''};
-          const date=get(['날짜','일자','date']);
+          const get=names=>{
+            const k=Object.keys(r).find(k=>names.some(n=>k.replace(/\s/g,'').includes(n)));
+            if(k==null) return '';
+            const v=r[k];
+            // JS Date 객체이면 YYYY-MM-DD 변환
+            if(v instanceof Date){
+              return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0');
+            }
+            return String(v||'').trim();
+          };
+          let date=get(['날짜','일자','date']);
+          // 날짜 정규화: 다양한 형식 → YYYY-MM-DD
+          if(date){
+            // "2026.06.24" or "2026/06/24" → "2026-06-24"
+            date=date.replace(/\./g,'-').replace(/\//g,'-');
+            // 엑셀 시리얼 숫자인 경우 (예: "46209")
+            if(/^\d{5}$/.test(date)){
+              const serial=Number(date);
+              const d=new Date(Math.round((serial-25569)*86400*1000));
+              date=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+            }
+            // "Wed Jun 24 2026..." 형식 대응
+            if(date.length>10 && date.includes(' ')){
+              const d=new Date(date);
+              if(!isNaN(d)){
+                date=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+              }
+            }
+          }
           const empName=get(['직원명','직원','이름','name']);
           const category=get(['사용구분','구분','category']);
           const amount=Number(String(get(['금액(원)','금액','amount'])).replace(/,/g,''))||0;
           if(!date||!empName||!category||!amount){skip++;return;}
-          // 직원 본부 자동 조회 (인사관리 기준, 없으면 엑셀 입력값 사용)
           const hrMatch=(State.hr||[]).find(h=>h.name===empName);
-          const data={
+          newItems.push({
             id:DB.uid(), date, empName,
             dept:hrMatch?.dept||get(['사업본부','본부','부서'])||'',
             category, subCategory:'',
             amount, contractId:null,
             receiptNote:'',
             memo:get(['비고','메모']),
-            status:'대기'  // 업로드 시 항상 대기 상태로 등록
-          };
-          State.expense.push(data); ok++;
+            status:'대기'
+          });
+          ok++;
         });
         if(!ok){toast('처리할 데이터가 없습니다');input.value='';return;}
-        toast('저장 중...');
-        try{await State.saveAll();toast('✅ '+ok+'건 등록 완료'+(skip?' · 건너뜀 '+skip+'건':''));Views.expense();}
-        catch(err){toast('❌ 저장 실패: '+err.message);}
+        toast('Supabase에 저장 중... ('+ok+'건)');
+        try{
+          // 대량 데이터: 50건씩 나눠서 insert (Supabase 요청 크기 제한 대응)
+          const CHUNK=50;
+          let saved=0;
+          for(let i=0;i<newItems.length;i+=CHUNK){
+            const chunk=newItems.slice(i,i+CHUNK);
+            const {error}=await supa.from('expense').insert(chunk.map(_conv.expenseTo));
+            if(error) throw error;
+            saved+=chunk.length;
+            toast('저장 중... '+saved+'/'+ok+'건');
+          }
+          // State에도 반영
+          newItems.forEach(item=>State.expense.push(item));
+          toast('✅ '+ok+'건 등록 완료'+(skip?' · 건너뜀 '+skip+'건':''));
+          Views.expense();
+        }catch(err){toast('❌ 저장 실패: '+err.message);console.error(err);}
       }catch(err){toast('가져오기 실패: 파일 형식을 확인하세요');console.error(err);}
       input.value='';
     };
