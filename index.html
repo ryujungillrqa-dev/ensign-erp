@@ -411,6 +411,46 @@ function calcBankBalances(){
   return map;
 }
 
+function showExpendModal_m(){
+  // 대시보드(M)용 — dashYear 기준
+  const yr = typeof dashYear !== 'undefined' ? dashYear : '';
+  const expList = (State.expense||[]).filter(e=>!yr||e.date.slice(0,4)===yr);
+  const expTotal = expList.reduce((s,e)=>s+(Number(e.amount)||0),0);
+  const payList = (State.payroll||[]).filter(p=>!yr||p.ym.slice(0,4)===yr);
+  const payTotal = payList.reduce((s,p)=>s+(Number(p.salary)||0)+(Number(p.insure)||0)+(Number(p.severance)||0),0);
+  const expendTotal = expTotal + payTotal;
+  const yearLabel = yr ? yr+'년' : '전체';
+  const byCat = {};
+  expList.forEach(e=>{ const c=e.category||'기타'; if(!byCat[c])byCat[c]=0; byCat[c]+=Number(e.amount)||0; });
+  const catRows = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([c,a])=>`<tr><td>${esc(c)}</td><td class="num">${fmt.money(a)}</td></tr>`).join('');
+  const payRows = payList.slice().sort((a,b)=>b.ym.localeCompare(a.ym)).map(p=>`
+    <tr><td>${esc(p.ym)}</td><td class="num">${fmt.money(Number(p.salary)||0)}</td><td class="num">${fmt.money(Number(p.insure)||0)}</td><td class="num">${fmt.money(Number(p.severance)||0)}</td><td class="num" style="font-weight:700">${fmt.money((Number(p.salary)||0)+(Number(p.insure)||0)+(Number(p.severance)||0))}</td></tr>`).join('');
+  const body = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div>
+        <div style="font-size:13px;font-weight:800;color:var(--brand);margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--line2)">💰 지출보고 합계 — ${fmt.money(expTotal)}원</div>
+        <table class="grid" style="font-size:12px">
+          <thead><tr><th>사용구분</th><th class="num">금액</th></tr></thead>
+          <tbody>${catRows||'<tr><td colspan="2" style="text-align:center;color:var(--ink3)">내역 없음</td></tr>'}</tbody>
+          <tfoot><tr style="font-weight:800;border-top:2px solid var(--line)"><td>합계</td><td class="num">${fmt.money(expTotal)}</td></tr></tfoot>
+        </table>
+      </div>
+      <div>
+        <div style="font-size:13px;font-weight:800;color:var(--brand);margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--line2)">💵 급여관리 합계 — ${fmt.money(payTotal)}원</div>
+        <table class="grid" style="font-size:12px">
+          <thead><tr><th>연월</th><th class="num">급여</th><th class="num">4대보험</th><th class="num">퇴직금</th><th class="num">소계</th></tr></thead>
+          <tbody>${payRows||'<tr><td colspan="5" style="text-align:center;color:var(--ink3)">내역 없음</td></tr>'}</tbody>
+          <tfoot><tr style="font-weight:800;border-top:2px solid var(--line)"><td>합계</td><td class="num">${fmt.money(payList.reduce((s,p)=>s+(Number(p.salary)||0),0))}</td><td class="num">${fmt.money(payList.reduce((s,p)=>s+(Number(p.insure)||0),0))}</td><td class="num">${fmt.money(payList.reduce((s,p)=>s+(Number(p.severance)||0),0))}</td><td class="num">${fmt.money(payTotal)}</td></tr></tfoot>
+        </table>
+      </div>
+    </div>
+    <div style="margin-top:14px;padding:10px 14px;background:var(--brand-soft);border-radius:8px;font-size:13px;font-weight:800;text-align:right">
+      ${yearLabel} 지출금 합계: ${fmt.money(expendTotal)}원
+      <span style="font-size:11px;font-weight:400;color:var(--ink2);margin-left:8px">(지출보고 ${fmt.money(expTotal)} + 급여 ${fmt.money(payTotal)})</span>
+    </div>`;
+  UI.openModal(`${yearLabel} 지출금 상세`, body, [{label:'닫기', cls:'pri', onClick:UI.closeModal}]);
+}
+
 function showExpendModal_g(){
   // 현재 dashYear 기준으로 지출보고/급여관리 상세 모달
   const yr = typeof dashYear !== 'undefined' ? dashYear : '';
@@ -576,6 +616,12 @@ Views.dash = function(){
   const bankBalMap = calcBankBalances();
   const bankBal    = Object.values(bankBalMap).reduce((s,v)=>s+v.balance,0);
   const bankList   = Object.entries(bankBalMap).sort((a,b)=>b[1].balance-a[1].balance);
+  // 지출금 합계 (지출보고 + 급여관리, 연도 기준)
+  const dashExpList = (State.expense||[]).filter(e=>!dashYear||e.date.slice(0,4)===dashYear);
+  const dashExpTotal = dashExpList.reduce((s,e)=>s+(Number(e.amount)||0),0);
+  const dashPayList = (State.payroll||[]).filter(p=>!dashYear||p.ym.slice(0,4)===dashYear);
+  const dashPayTotal = dashPayList.reduce((s,p)=>(s+(Number(p.salary)||0)+(Number(p.insure)||0)+(Number(p.severance)||0)),0);
+  const dashExpendTotal = dashExpTotal + dashPayTotal;
   const yearLabel= dashYear ? dashYear+'년' : '전체';
 
   /* 탭 버튼 */
@@ -917,7 +963,7 @@ Views.dash = function(){
     </div>
 
     <!-- KPI -->
-    <div class="kpis" style="grid-template-columns:repeat(4,minmax(0,1fr)) minmax(170px,1.1fr)">
+    <div class="kpis" style="grid-template-columns:repeat(5,minmax(0,1fr)) minmax(170px,1.1fr)">
       <div class="kpi a"><div class="lb">${yearLabel} 계약</div><div class="vl">${cts.length}<small> 건</small></div></div>
       <div class="kpi b"><div class="lb">${yearLabel} 계약금액</div><div class="vl">${fmt.money(totalAmt)}<small> 원</small></div>
         <div style="margin-top:4px;font-size:10.5px;color:var(--ink3)">부가세포함 ${fmt.money(totalAmtVat)}원</div></div>
@@ -926,6 +972,18 @@ Views.dash = function(){
       <div class="kpi c"><div class="lb">${yearLabel} 미수금</div>
         <div class="vl" style="color:${unpaidAmt>0?'var(--red)':'inherit'}">${fmt.money(unpaidAmt)}<small> 원</small></div>
         <div style="margin-top:4px;font-size:10.5px;color:var(--ink3)">부가세포함 ${fmt.money(unpaidAmtVat)}원</div></div>
+
+      <!-- 지출금 합계 (지출보고 + 급여관리) -->
+      <div class="kpi d" style="cursor:pointer" onclick="showExpendModal_m()">
+        <div class="lb" style="display:flex;justify-content:space-between;align-items:center">
+          <span>${yearLabel} 지출금 합계</span>
+          <span style="font-size:10px;color:var(--ink3);font-weight:500">▼ 상세</span>
+        </div>
+        <div class="vl">${fmt.money(dashExpendTotal)}<small> 원</small></div>
+        <div style="margin-top:6px;font-size:11px;color:var(--ink3)">
+          지출보고 ${fmt.money(dashExpTotal)} + 급여 ${fmt.money(dashPayTotal)}
+        </div>
+      </div>
 
       <!-- 통장 잔액 합계 (단독 카드) -->
       <div class="kpi d" style="cursor:pointer" onclick="showBankBalModal()">
