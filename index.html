@@ -5907,9 +5907,21 @@ const Expense = {
     };
     if(!State.expense) State.expense=[];
     if(id){
+      // 수정: 본인 제외하고 중복 체크
+      const dupKey=e=>`${e.date}|${e.empName}|${e.category}|${e.amount}`;
+      const myKey=`${data.date}|${data.empName}|${data.category}|${data.amount}`;
+      const dup=(State.expense||[]).find(e=>e.id!==id && dupKey(e)===myKey);
+      if(dup && !confirm(`[${dup.date} ${dup.empName} ${dup.category} ${fmt.money(Number(dup.amount))}원]과 동일한 내역이 이미 있습니다.
+그래도 저장하시겠습니까?`)) return;
       const idx = State.expense.findIndex(x=>x.id===id);
       if(idx>=0) State.expense[idx]={...State.expense[idx],...data};
     } else {
+      // 신규: 중복 체크
+      const dupKey=e=>`${e.date}|${e.empName}|${e.category}|${e.amount}`;
+      const myKey=`${data.date}|${data.empName}|${data.category}|${data.amount}`;
+      const dup=(State.expense||[]).find(e=>dupKey(e)===myKey);
+      if(dup && !confirm(`[${dup.date} ${dup.empName} ${dup.category} ${fmt.money(Number(dup.amount))}원]과 동일한 내역이 이미 있습니다.
+그래도 등록하시겠습니까?`)) return;
       data.id = DB.uid(); State.expense.push(data);
     }
     toast('저장 중...');
@@ -6075,28 +6087,82 @@ const Expense = {
           ok++;
         });
         if(!ok){toast('처리할 데이터가 없습니다');input.value='';return;}
-        toast('Supabase에 저장 중... ('+ok+'건)');
-        try{
-          // 대량 데이터: 50건씩 나눠서 insert (Supabase 요청 크기 제한 대응)
-          const CHUNK=50;
-          let saved=0;
-          for(let i=0;i<newItems.length;i+=CHUNK){
-            const chunk=newItems.slice(i,i+CHUNK);
-            const {error}=await supa.from('expense').insert(chunk.map(_conv.expenseTo));
-            if(error) throw error;
-            saved+=chunk.length;
-            toast('저장 중... '+saved+'/'+ok+'건');
-          }
-          // State에도 반영
-          newItems.forEach(item=>State.expense.push(item));
-          toast('✅ '+ok+'건 등록 완료'+(skip?' · 건너뜀 '+skip+'건':''));
-          Views.expense();
-        }catch(err){toast('❌ 저장 실패: '+err.message);console.error(err);}
+        // 중복 감지: 날짜+직원명+사용구분+금액 모두 일치하면 중복
+        const dupKey=e=>`${e.date}|${e.empName}|${e.category}|${e.amount}`;
+        const existKeys=new Set((State.expense||[]).map(dupKey));
+        const dups=newItems.filter(e=>existKeys.has(dupKey(e)));
+        const fresh=newItems.filter(e=>!existKeys.has(dupKey(e)));
+        if(dups.length>0){
+          // 중복 항목이 있으면 모달로 선택
+          Expense._showDupModal(fresh, dups, skip);
+        } else {
+          // 중복 없으면 바로 저장
+          await Expense._saveImportItems(fresh, skip);
+        }
       }catch(err){toast('가져오기 실패: 파일 형식을 확인하세요');console.error(err);}
       input.value='';
     };
     reader.readAsArrayBuffer(file);
   },
+  // 중복 항목 모달: 사용자가 선택 후 저장
+  _showDupModal(fresh, dups, skip){
+    const rows = dups.map((e,i)=>`
+      <tr>
+        <td><input type="checkbox" class="dup-chk" data-i="${i}" checked style="cursor:pointer"></td>
+        <td style="font-size:12px">${esc(e.date)}</td>
+        <td>${esc(e.empName)}</td>
+        <td>${esc(e.category)}</td>
+        <td class="num">${fmt.money(Number(e.amount)||0)}</td>
+        <td style="font-size:12px;color:var(--ink3)">${esc(e.memo||'-')}</td>
+      </tr>`).join('');
+    const body = `
+      <div style="font-size:13px;color:var(--ink2);margin-bottom:10px">
+        아래 <b style="color:var(--red)">${dups.length}건</b>은 이미 등록된 내역과 날짜·직원명·사용구분·금액이 동일합니다.<br>
+        추가 등록할 항목에 체크하세요. (체크 해제 시 건너뜁니다)
+      </div>
+      <div style="overflow-x:auto">
+        <table class="grid" style="font-size:12.5px">
+          <thead><tr>
+            <th style="width:36px"><input type="checkbox" id="dup-all" checked onchange="document.querySelectorAll('.dup-chk').forEach(c=>c.checked=this.checked)"></th>
+            <th>날짜</th><th>직원명</th><th>사용구분</th><th class="num">금액</th><th>비고</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:var(--ink3)">
+        ✅ 중복 아닌 신규: ${fresh.length}건은 무조건 등록됩니다.
+      </div>`;
+    UI.openModal('중복 내역 확인 ('+dups.length+'건)', body, [
+      {label:'취소', onClick:UI.closeModal},
+      {label:'선택 항목만 등록', cls:'pri', onClick:async()=>{
+        const checked = [...document.querySelectorAll('.dup-chk')]
+          .filter(c=>c.checked).map(c=>dups[Number(c.dataset.i)]);
+        UI.closeModal();
+        await Expense._saveImportItems([...fresh,...checked], skip);
+      }},
+    ]);
+  },
+
+  // 실제 저장 (50건 단위 분할)
+  async _saveImportItems(items, skip){
+    if(!items.length){ toast('저장할 항목이 없습니다'+(skip?' · 건너뜀 '+skip+'건':'')); return; }
+    toast('저장 중... ('+items.length+'건)');
+    try{
+      const CHUNK=50;
+      let saved=0;
+      for(let i=0;i<items.length;i+=CHUNK){
+        const chunk=items.slice(i,i+CHUNK);
+        const {error}=await supa.from('expense').insert(chunk.map(_conv.expenseTo));
+        if(error) throw error;
+        saved+=chunk.length;
+        toast('저장 중... '+saved+'/'+items.length+'건');
+      }
+      items.forEach(item=>State.expense.push(item));
+      toast('✅ '+items.length+'건 등록 완료'+(skip?' · 건너뜀 '+skip+'건':''));
+      Views.expense();
+    }catch(err){ toast('❌ 저장 실패: '+err.message); console.error(err); }
+  },
+
   exportXlsx(){
     const list=_expRows();
     if(!list.length){toast('내보낼 데이터가 없습니다');return;}
