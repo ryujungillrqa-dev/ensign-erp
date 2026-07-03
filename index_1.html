@@ -189,8 +189,8 @@ table.dz td.num-ro{padding:6px 9px;text-align:right;font-variant-numeric:tabular
     <a href="#ediagmail" data-v="ediagmail"><span class="ic">📧</span>진단일정등록</a>
     <a href="#ediag" data-v="ediag"><span class="ic">⚡</span>에너지진단</a>
     <a href="#equip" data-v="equip"><span class="ic">🔧</span>진단장비현황</a>
-    <a href="#expense" data-v="expense"><span class="ic">💰</span>지출보고</a>
     <a href="#invoices" data-v="invoices"><span class="ic">🧾</span>세금계산서</a>
+    <a href="#expense" data-v="expense"><span class="ic">💰</span>지출보고</a>
     <a href="#payroll" data-v="payroll"><span class="ic">💵</span>급여관리</a>
     <div class="grp">관리자</div>
     <a href="#dash" data-v="dash"><span class="ic">▦</span>대시보드</a>
@@ -2601,7 +2601,7 @@ const _conv={
   equipTo:function(e){return{id:e.id,equip_name:e.equipName||'',equip_no:e.equipNo||'',sn:e.sn||'',calibration_history:e.calibrationHistory||'',purchase_year:e.purchaseYear||'',failure_history:e.failureHistory||'',memo:e.memo||'',holder_name:e.holderName||'',holder_since:e.holderSince||'',handover_history:e.handoverHistory||[],pending_handover_id:e.pendingHandoverId||null,pending_holder_name:e.pendingHolderName||null};},
   equipFrom:function(r){return{id:r.id,equipName:r.equip_name,equipNo:r.equip_no,sn:r.sn,calibrationHistory:r.calibration_history,purchaseYear:r.purchase_year,failureHistory:r.failure_history,memo:r.memo,holderName:r.holder_name||'',holderSince:r.holder_since||'',handoverHistory:r.handover_history||[],pendingHandoverId:r.pending_handover_id||null,pendingHolderName:r.pending_holder_name||null};},
   payrollTo:function(p){return{id:p.id,ym:p.ym||'',salary:p.salary||0,insure:p.insure||0,severance:p.severance||0,memo:p.memo||''};},
-  payrollFrom:function(r){return{id:r.id,ym:r.ym||'',salary:r.salary||0,insureEmp:r.insure_emp||0,insureComp:r.insure_comp||0,severance:r.severance||0,memo:r.memo||''};},
+  payrollFrom:function(r){return{id:r.id,ym:r.ym||'',salary:r.salary||0,insure:(r.insure||r.insure_emp||0),severance:r.severance||0,memo:r.memo||''};},
   expenseTo:function(e){return{id:e.id,date:e.date||'',emp_name:e.empName||'',dept:e.dept||'',category:e.category||'',sub_category:e.subCategory||'',amount:e.amount||0,contract_id:e.contractId||null,receipt_note:e.receiptNote||'',memo:e.memo||'',status:e.status||'대기'};},
   expenseFrom:function(r){return{id:r.id,date:r.date||'',empName:r.emp_name||'',dept:r.dept||'',category:r.category||'',subCategory:r.sub_category||'',amount:r.amount||0,contractId:r.contract_id||null,receiptNote:r.receipt_note||'',memo:r.memo||'',status:r.status||'대기'};},
 };
@@ -5530,9 +5530,9 @@ function _renderPayroll(){
   const kpi = document.getElementById('pay-kpis');
   if(kpi) kpi.innerHTML = `
     <div class="kpi a"><div class="lb">${payrollYear}년 급여 합계</div><div class="vl">${fmt.money(totSalary)}<small> 원</small></div></div>
-    <div class="kpi b"><div class="lb">4대보험 합계</div><div class="vl">${fmt.money(totInsEmp)}<small> 원</small></div></div>
     <div class="kpi c"><div class="lb">퇴직금 합계</div><div class="vl">${fmt.money(totSeverance)}<small> 원</small></div></div>
-    <div class="kpi e"><div class="lb">총 인건비 (급여+4대보험+퇴직금)</div><div class="vl">${fmt.money(totAll)}<small> 원</small></div></div>`;
+    <div class="kpi b"><div class="lb">4대보험 합계</div><div class="vl">${fmt.money(totInsEmp)}<small> 원</small></div></div>
+    <div class="kpi e"><div class="lb">총 인건비 (급여+퇴직금+4대보험)</div><div class="vl">${fmt.money(totAll)}<small> 원</small></div></div>`;
 
   if(!list.length){
     document.getElementById('pay-list').innerHTML =
@@ -5545,8 +5545,8 @@ function _renderPayroll(){
     return `<tr>
       <td style="font-size:13px;font-weight:700">${esc(p.ym)}</td>
       <td class="num">${fmt.money(Number(p.salary)||0)}</td>
-      <td class="num">${fmt.money(Number(p.insure)||0)}</td>
       <td class="num">${fmt.money(Number(p.severance)||0)}</td>
+      <td class="num">${fmt.money(Number(p.insure)||0)}</td>
       <td class="num" style="font-weight:700;color:var(--brand)">${fmt.money(total)}</td>
       <td style="font-size:12px;color:var(--ink3)">${esc(p.memo||'-')}</td>
       <td class="ctr">
@@ -5561,8 +5561,8 @@ function _renderPayroll(){
   const sumRow = `<tr style="border-top:2px solid var(--line);background:#f7f9f8;font-weight:800">
     <td>합계</td>
     <td class="num">${fmt.money(totSalary)}</td>
-    <td class="num">${fmt.money(totInsEmp)}</td>
     <td class="num">${fmt.money(totSeverance)}</td>
+    <td class="num">${fmt.money(totInsEmp)}</td>
     <td class="num" style="color:var(--brand)">${fmt.money(sumTotal)}</td>
     <td colspan="2"></td>
   </tr>`;
@@ -5573,8 +5573,8 @@ function _renderPayroll(){
         <thead><tr>
           <th style="width:90px">연월</th>
           <th class="num" style="width:130px">급여</th>
-          <th class="num" style="width:140px">4대보험</th>
           <th class="num" style="width:130px">퇴직금</th>
+          <th class="num" style="width:140px">4대보험</th>
           <th class="num" style="width:160px">총 인건비</th>
           <th style="width:160px">비고</th>
           <th class="ctr" style="width:100px">관리</th>
@@ -5598,17 +5598,19 @@ const Payroll = {
         <div class="fld w2">
           <label>연월 <span style="color:var(--red)">*</span></label>
           <input type="month" id="pay-ym" value="${esc(defaultYm)}" style="width:180px">
-          <span id="pay-ym-warn" style="color:var(--red);font-size:12px;display:none">이미 등록된 연월입니다</span>
+          <span id="pay-ym-warn" style="color:var(--red);font-size:12px;display:none;margin-left:8px">이미 등록된 연월입니다</span>
         </div>
-        <div class="fld"><label>급여 <span style="color:var(--red)">*</span></label>
-          <input type="number" id="pay-salary" value="${p?p.salary:''}" placeholder="예: 15000000" min="0"></div>
-        <div class="fld"><label>4대보험</label>
-          <input type="number" id="pay-ins-emp" value="${p?p.insure:''}" placeholder="예: 1395000" min="0"></div>
-        <div class="fld"><label>퇴직금 (충당)</label>
-          <input type="number" id="pay-severance" value="${p?p.severance:''}" placeholder="예: 1250000" min="0"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;grid-column:1/-1">
+          <div><label style="font-size:12px;font-weight:700;color:var(--ink2);display:block;margin-bottom:4px">급여 <span style="color:var(--red)">*</span></label>
+            <input type="number" id="pay-salary" value="${p?p.salary:''}" placeholder="예: 15000000" min="0" style="width:100%"></div>
+          <div><label style="font-size:12px;font-weight:700;color:var(--ink2);display:block;margin-bottom:4px">퇴직금</label>
+            <input type="number" id="pay-severance" value="${p?p.severance:''}" placeholder="예: 1250000" min="0" style="width:100%"></div>
+          <div><label style="font-size:12px;font-weight:700;color:var(--ink2);display:block;margin-bottom:4px">4대보험</label>
+            <input type="number" id="pay-ins-emp" value="${p?p.insure:''}" placeholder="예: 1395000" min="0" style="width:100%"></div>
+        </div>
         <div class="fld w2">
           <label style="font-size:12px;color:var(--ink2);font-weight:400;margin-top:4px;display:block">
-            총 인건비 (자동계산): 급여 + 4대보험 + 퇴직금
+            총 인건비 (자동계산): 급여 + 퇴직금 + 4대보험
           </label>
         </div>
         <div class="fld w2"><label>비고</label>
