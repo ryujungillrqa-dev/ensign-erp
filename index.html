@@ -5752,6 +5752,9 @@ Views.expense = function(){
         value="${esc(expFilter.q)}" oninput="expFilter.q=this.value;_renderExpense()" style="width:180px">
       <span class="sp"></span>
       <span id="exp-summary" style="font-size:12.5px;color:var(--ink2)"></span>
+      <button class="btn" id="exp-bulk-approve" onclick="Expense.bulkAction('승인')" style="display:none;background:#e8f5e9;border-color:#a5d6a7;color:#2e7d32">✅ 일괄승인</button>
+      <button class="btn" id="exp-bulk-reject"  onclick="Expense.bulkAction('반려')" style="display:none;background:#ffebee;border-color:#ef9a9a;color:#c62828">❌ 일괄반려</button>
+      <button class="btn" id="exp-bulk-del"     onclick="Expense.bulkAction('삭제')" style="display:none;background:#ffebee;border-color:#ef9a9a;color:#c62828">🗑 일괄삭제</button>
       <button class="btn" onclick="Expense.template()">업로드 양식</button>
       <label class="btn">엑셀 일괄등록<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="Expense.importXlsx(this)"></label>
       <button class="btn" onclick="Expense.exportXlsx()">엑셀 내보내기</button>
@@ -5816,6 +5819,7 @@ function _renderExpense(){
          <button class="btn sm" style="background:#ffebee;border-color:#ef9a9a;color:#c62828" onclick="Expense.reject('${e.id}')">반려</button>`
       : '';
     return `<tr>
+      <td class="ctr"><input type="checkbox" class="exp-row-chk" value="${e.id}"></td>
       <td style="font-size:12px">${esc(e.date)}</td>
       <td><b>${esc(e.empName||'')}</b></td>
       <td style="font-size:12px;color:var(--ink2)">${esc(e.dept||'-')}</td>
@@ -5825,7 +5829,6 @@ function _renderExpense(){
       <td class="ctr">${statusTag}</td>
       <td class="ctr">
         ${adminBtns}
-        <button class="btn sm" onclick="Expense.edit('${e.id}')">수정</button>
         <button class="btn sm dgr" onclick="Expense.del('${e.id}')">삭제</button>
       </td>
     </tr>`;
@@ -5835,6 +5838,7 @@ function _renderExpense(){
     <div class="card" style="margin:0"><div class="bd np tbl-wrap">
       <table class="grid">
         <thead><tr>
+          <th style="width:36px"><input type="checkbox" id="exp-chk-all" onchange="Expense.checkAll(this)"></th>
           <th style="width:90px">날짜</th>
           <th style="width:80px">직원</th>
           <th style="width:100px">사업본부</th>
@@ -5842,11 +5846,17 @@ function _renderExpense(){
           <th class="num" style="width:100px">금액(원)</th>
           <th style="width:200px">비고</th>
           <th class="ctr" style="width:70px">상태</th>
-          <th class="ctr" style="width:160px">관리</th>
+          <th class="ctr" style="width:130px">관리</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div></div>`;
+  // 체크박스 변경 시 일괄처리 버튼 표시
+  setTimeout(()=>{
+    document.querySelectorAll('.exp-row-chk').forEach(c=>{
+      c.addEventListener('change', ()=>Expense._updateBulkBtns());
+    });
+  }, 50);
 }
 
 const Expense = {
@@ -6104,6 +6114,75 @@ const Expense = {
     };
     reader.readAsArrayBuffer(file);
   },
+  // 전체 선택/해제
+  checkAll(chkAll){
+    document.querySelectorAll('.exp-row-chk').forEach(c=>c.checked=chkAll.checked);
+    Expense._updateBulkBtns();
+  },
+
+  // 체크 변경 시 일괄처리 버튼 표시/숨김
+  _updateBulkBtns(){
+    const cnt = [...document.querySelectorAll('.exp-row-chk')].filter(c=>c.checked).length;
+    const isAdmin = _supaProfile?.role==='관리자'||_supaProfile?.role==='부관리자';
+    ['exp-bulk-del'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.style.display = cnt>0 ? '' : 'none';
+    });
+    if(isAdmin){
+      ['exp-bulk-approve','exp-bulk-reject'].forEach(id=>{
+        const el=document.getElementById(id);
+        if(el) el.style.display = cnt>0 ? '' : 'none';
+      });
+    }
+    // 전체선택 체크박스 상태 동기화
+    const all=document.querySelectorAll('.exp-row-chk');
+    const allChk=document.getElementById('exp-chk-all');
+    if(allChk) allChk.checked = all.length>0 && [...all].every(c=>c.checked);
+  },
+
+  // 일괄처리 (승인/반려/삭제)
+  async bulkAction(action){
+    const ids=[...(document.querySelectorAll('.exp-row-chk'))].filter(c=>c.checked).map(c=>c.value);
+    if(!ids.length){ toast('선택된 항목이 없습니다'); return; }
+    const label = action==='삭제' ? '삭제' : action;
+    if(!confirm(`선택한 ${ids.length}건을 ${label} 처리하시겠습니까?`)) return;
+    if(!State.expense) return;
+    toast('처리 중...');
+    try{
+      if(action==='삭제'){
+        // 50건씩 나눠서 삭제
+        for(let i=0;i<ids.length;i+=50){
+          const chunk=ids.slice(i,i+50);
+          const {error}=await supa.from('expense').delete().in('id',chunk);
+          if(error) throw error;
+        }
+        State.expense=State.expense.filter(e=>!ids.includes(e.id));
+      } else {
+        // 승인/반려: 상태만 변경
+        for(let i=0;i<ids.length;i+=50){
+          const chunk=ids.slice(i,i+50);
+          const updates={status:action};
+          if(action==='반려'){
+            const reason=prompt('반려 사유를 입력하세요 (비고에 기록됩니다)');
+            if(reason===null) return;
+            // 각 항목 비고에 반려 사유 추가
+            State.expense.filter(e=>chunk.includes(e.id)).forEach(e=>{
+              e.status='반려';
+              if(reason) e.memo=(e.memo?e.memo+' / ':'')+`[반려: ${reason}]`;
+            });
+            await State.saveAll();
+            break;
+          }
+          const {error}=await supa.from('expense').update(updates).in('id',chunk);
+          if(error) throw error;
+          State.expense.filter(e=>chunk.includes(e.id)).forEach(e=>e.status=action);
+        }
+      }
+      toast('✅ '+ids.length+'건 '+label+' 완료');
+      Views.expense();
+    }catch(err){ toast('❌ 실패: '+err.message); console.error(err); }
+  },
+
   // 중복 항목 모달: 사용자가 선택 후 저장
   _showDupModal(fresh, dups, skip){
     const rows = dups.map((e,i)=>`
