@@ -4249,7 +4249,7 @@ function _renderEdiag(){
 
   if(!list.length){
     document.getElementById('ediag-list').innerHTML =
-      `<div class="card"><div class="empty"><b>에너지진단팀 계약이 없습니다</b>계약관리에서 사업본부를 [에너지진단팀]으로 등록하면 여기 표시됩니다</div></div>`;
+      `<div class="card"><div class="empty"><b>계약이 없습니다</b>계약관리에서 계약을 등록하면 여기 표시됩니다</div></div>`;
     return;
   }
 
@@ -4696,7 +4696,7 @@ Views.ediagmail = function(q){
           : `<span style="color:var(--ink3);font-size:12px">-</span>`}
       </td>
     </tr>`;
-  }).join('') || `<tr><td colspan="8"><div class="empty"><b>에너지진단팀 계약이 없습니다</b></div></td></tr>`;
+  }).join('') || `<tr><td colspan="8"><div class="empty"><b>계약이 없습니다</b></div></td></tr>`;
 
   document.getElementById('content').innerHTML = `
     <div class="toolbar sticky-toolbar">
