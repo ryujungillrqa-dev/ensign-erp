@@ -4652,9 +4652,8 @@ function ediagMailSearchInput(e){
 }
 Views.ediagmail = function(q){
   if(q!==undefined) ediagMailFilter.q=q;
-  // 에너지진단팀(04) 계약
+  // 전체 계약
   const allContracts = State.contracts
-    .filter(c=>c.typeCode==='04')
     .sort((a,b)=>(b.no||'').localeCompare(a.no||''));
   const ediagContracts = allContracts.filter(c=>{
     if(ediagMailFilter.year && (c.year||'')!==ediagMailFilter.year) return false;
