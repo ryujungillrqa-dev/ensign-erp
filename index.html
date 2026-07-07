@@ -186,7 +186,7 @@ table.dz td.num-ro{padding:6px 9px;text-align:right;font-variant-numeric:tabular
   <nav id="nav">
     <div class="grp">업무</div>
     <a href="#contracts" data-v="contracts"><span class="ic">📄</span>계약관리</a>
-    <a href="#ediagmail" data-v="ediagmail"><span class="ic">📧</span>진단일정등록</a>
+    <a href="#ediagmail" data-v="ediagmail"><span class="ic">📧</span>업무일정등록</a>
     <a href="#ediag" data-v="ediag"><span class="ic">⚡</span>업무확인 · 완료</a>
     <a href="#equip" data-v="equip"><span class="ic">🔧</span>진단장비현황</a>
     <a href="#invoices" data-v="invoices"><span class="ic">🧾</span>세금계산서</a>
@@ -363,7 +363,7 @@ const VIEW_META = {
   expense:{title:'지출보고', crumb:'직원별 · 본부별 · 구분별 지출 관리'},
   payroll:{title:'급여관리', crumb:'월별 급여 · 4대보험 · 퇴직금 관리'},
   ediag:{title:'업무확인 · 완료', crumb:'사업본부별 업무 현황 · 완료 관리'},
-  ediagmail:{title:'진단일정등록', crumb:'에너지진단 일정 등록 · 팀장 메일 발송'}
+  ediagmail:{title:'업무일정등록', crumb:'사업본부별 업무일정 등록 · 팀장 메일 발송'}
 };
 
 /* 검색창 — 한글 IME 조합 대응 */
@@ -3955,7 +3955,7 @@ const HR = {
 ===================================================== */
 const AUTH_MENUS = [
   { key:'contracts',  label:'계약관리' },
-  { key:'ediagmail',  label:'진단일정등록' },
+  { key:'ediagmail',  label:'업무일정등록' },
   { key:'ediag',      label:'업무확인 · 완료' },
   { key:'equip',      label:'진단장비현황' },
   { key:'expense',    label:'지출보고' },
@@ -4629,9 +4629,9 @@ Object.assign(Ediag, {
 </script>
 <script>
 /* =====================================================
-   진단일정등록 — 에너지진단 일정 등록 + 팀장 메일 발송
+   업무일정등록 — 사업본부별 업무일정 등록 + 팀장 메일 발송
 ===================================================== */
-let ediagMailFilter = { q:'', year:'' };
+let ediagMailFilter = { q:'', year:'', typeCode:'' };
 function ediagMailSearchInput(e){
   if(_ime['ediagmail']) return;
   ediagMailFilter.q = e.target.value;
@@ -4660,6 +4660,7 @@ Views.ediagmail = function(q){
   const allContracts = State.contracts
     .sort((a,b)=>(b.no||'').localeCompare(a.no||''));
   const ediagContracts = allContracts.filter(c=>{
+    if(ediagMailFilter.typeCode && (c.typeCode||'')!==ediagMailFilter.typeCode) return false;
     if(ediagMailFilter.year && (c.year||'')!==ediagMailFilter.year) return false;
     if(!ediagMailFilter.q) return true;
     const q2=ediagMailFilter.q.toLowerCase();
@@ -4708,6 +4709,10 @@ Views.ediagmail = function(q){
         value="${esc(ediagMailFilter.q)}"
         oninput="ediagMailSearchInput(event)"
         style="width:220px">
+      <select onchange="ediagMailFilter.typeCode=this.value;Views.ediagmail()" style="border:1px solid var(--line);border-radius:7px;padding:7px 10px;background:#fff;font-size:13px">
+        <option value="">전체 사업본부</option>
+        ${Object.entries(TYPE_CODES).map(([k,v])=>`<option value="${k}" ${ediagMailFilter.typeCode===k?'selected':''}>${v}</option>`).join('')}
+      </select>
       <select onchange="ediagMailFilter.year=this.value;Views.ediagmail()" style="border:1px solid var(--line);border-radius:7px;padding:7px 10px;background:#fff;font-size:13px">
         <option value="">대상년도 전체</option>
         ${[...new Set(allContracts.map(c=>c.year||'').filter(Boolean))].sort().reverse()
