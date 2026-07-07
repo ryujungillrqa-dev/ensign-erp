@@ -187,7 +187,7 @@ table.dz td.num-ro{padding:6px 9px;text-align:right;font-variant-numeric:tabular
     <div class="grp">업무</div>
     <a href="#contracts" data-v="contracts"><span class="ic">📄</span>계약관리</a>
     <a href="#ediagmail" data-v="ediagmail"><span class="ic">📧</span>진단일정등록</a>
-    <a href="#ediag" data-v="ediag"><span class="ic">⚡</span>에너지진단</a>
+    <a href="#ediag" data-v="ediag"><span class="ic">⚡</span>업무확인 · 완료</a>
     <a href="#equip" data-v="equip"><span class="ic">🔧</span>진단장비현황</a>
     <a href="#invoices" data-v="invoices"><span class="ic">🧾</span>세금계산서</a>
     <a href="#expense" data-v="expense"><span class="ic">💰</span>지출보고</a>
@@ -362,7 +362,7 @@ const VIEW_META = {
   equip:{title:'진단장비현황', crumb:'에너지진단 장비 · 검교정 · 고장이력 관리'},
   expense:{title:'지출보고', crumb:'직원별 · 본부별 · 구분별 지출 관리'},
   payroll:{title:'급여관리', crumb:'월별 급여 · 4대보험 · 퇴직금 관리'},
-  ediag:{title:'에너지진단', crumb:'에너지진단팀 계약 · 진단팀 구성 관리'},
+  ediag:{title:'업무확인 · 완료', crumb:'사업본부별 업무 현황 · 완료 관리'},
   ediagmail:{title:'진단일정등록', crumb:'에너지진단 일정 등록 · 팀장 메일 발송'}
 };
 
@@ -3956,7 +3956,7 @@ const HR = {
 const AUTH_MENUS = [
   { key:'contracts',  label:'계약관리' },
   { key:'ediagmail',  label:'진단일정등록' },
-  { key:'ediag',      label:'에너지진단' },
+  { key:'ediag',      label:'업무확인 · 완료' },
   { key:'equip',      label:'진단장비현황' },
   { key:'expense',    label:'지출보고' },
   { key:'payroll',    label:'급여관리' },
@@ -4206,14 +4206,18 @@ const Auth = {
    - 인사관리 재직자 목록에서 선택
    State.ediag = [{id, contractId, leader:{hrId,name}, members:[{hrId,name}], startDate, endDate, memo}]
 ===================================================== */
-let ediagFilter = { q:'', year:'' };
+let ediagFilter = { q:'', year:'', typeCode:'' };
 
 Views.ediag = function(){
-  const years = [...new Set(State.contracts.filter(c=>c.typeCode==='04').map(c=>c.year))].sort().reverse();
+  const years = [...new Set(State.contracts.map(c=>c.year).filter(Boolean))].sort().reverse();
   document.getElementById('content').innerHTML = `
     <div class="toolbar sticky-toolbar">
       <input type="search" id="ediag-search" placeholder="계약번호·계약명·업체명 검색"
         value="${esc(ediagFilter.q)}" oninput="ediagSearchInput(event)" style="width:240px">
+      <select onchange="ediagFilter.typeCode=this.value;_renderEdiag()" style="border:1px solid var(--line);border-radius:7px;padding:7px 10px;background:#fff;font-size:13px">
+        <option value="">전체 사업본부</option>
+        ${Object.entries(TYPE_CODES).map(([k,v])=>`<option value="${k}" ${ediagFilter.typeCode===k?'selected':''}>${v}</option>`).join('')}
+      </select>
       <select onchange="ediagFilter.year=this.value;_renderEdiag()">
         <option value="">대상년도 전체</option>
         ${years.map(y=>`<option ${ediagFilter.year===y?'selected':''}>${y}</option>`).join('')}
@@ -4235,7 +4239,7 @@ function ediagByContract(cid){ return State.ediag.find(d=>d.contractId===cid); }
 
 function _renderEdiag(){
   const list = State.contracts.filter(c=>{
-    if(c.typeCode !== '04') return false;
+    if(ediagFilter.typeCode && c.typeCode !== ediagFilter.typeCode) return false;
     if(ediagFilter.year && c.year !== ediagFilter.year) return false;
     if(ediagFilter.q){
       const q = ediagFilter.q.toLowerCase();
