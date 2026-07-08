@@ -1543,7 +1543,27 @@ function _renderContracts(){
       <td class="num"><b>${fmt.money(total)}</b></td>
       <td class="num">${fmt.money(paidAmt)}</td>
       <td class="ctr">${esc(c.manager||'-')}</td>
-      <td class="ctr">${(c.payKinds&&c.payKinds.length?c.payKinds:INV_KINDS.filter(k=>contractInvoices(c.id).some(v=>v.kind===k))).map(k=>`<span class="tag gray" style="margin:1px">${k}</span>`).join('')}</td>
+      <td class="ctr">${(()=>{
+        const kinds = c.payKinds&&c.payKinds.length ? c.payKinds : INV_KINDS.filter(k=>contractInvoices(c.id).some(v=>v.kind===k));
+        const invs = contractInvoices(c.id);
+        return kinds.map(k=>{
+          const inv = invs.find(v=>v.kind===k);
+          const issued  = inv && inv.issueDate;   // 발행완료
+          const paid    = inv && inv.paid;         // 입금완료
+          let style, title;
+          if(paid){
+            style='background:#e3f2fd;color:#1565c0;border-color:#90caf9';
+            title='입금완료';
+          } else if(issued){
+            style='background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7';
+            title='발행완료 (미입금)';
+          } else {
+            style='background:#f5f5f5;color:#888;border-color:#ddd';
+            title='미발행';
+          }
+          return `<span class="tag" style="margin:1px;${style}" title="${title}">${k}</span>`;
+        }).join('');
+      })()}</td>
       <td class="ctr">
         <button class="btn sm" onclick="Contracts.edit('${c.id}')">수정</button>
         <button class="btn sm dgr" onclick="Contracts.del('${c.id}')">삭제</button>
