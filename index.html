@@ -1621,12 +1621,12 @@ const Contracts = {
     const year = c ? c.year : String(new Date().getFullYear());
     const body = `
       <div class="frm">
-        <div class="fld"><label>대상년도</label><input id="f-year" type="number" value="${esc(c?c.year:year)}" ${c?'readonly':''} onchange="Contracts.previewNo()"></div>
+        <div class="fld"><label>대상년도</label><input id="f-year" type="number" value="${esc(c?c.year:year)}" onchange="Contracts.previewNo()"></div>
         <div class="fld"><label>사업본부</label>
-          <select id="f-type" ${c?'disabled':''} onchange="Contracts.previewNo();Contracts.toggleToe()">
+          <select id="f-type" onchange="Contracts.previewNo();Contracts.toggleToe()">
             ${Object.keys(TYPE_CODES).map(k=>`<option value="${k}" ${c&&c.typeCode===k?'selected':''}>${k}. ${TYPE_CODES[k]}</option>`).join('')}
           </select></div>
-        <div class="fld"><label>계약번호 (자동채번)</label><input id="f-no" readonly value="${esc(c?c.no:'')}"></div>
+        <div class="fld"><label>계약번호</label><input id="f-no" readonly value="${esc(c?c.no:'')}" ${c?'data-fixed=\"1\"':''}></div>
         <div class="fld"><label>담당자</label><input id="f-manager" value="${esc(c?c.manager:'')}"></div>
         <div class="fld"><label>계약일</label><input id="f-cdate" type="date" value="${esc(c?c.contractDate:'')}"></div>
         <div class="fld w2"><label>계약명</label><input id="f-name" value="${esc(c?c.name:'')}"></div>
