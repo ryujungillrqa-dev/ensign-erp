@@ -355,7 +355,7 @@ const VIEW_META = {
   invoices:{title:'세금계산서', crumb:'더존식 발행관리 (계약별 결제방식 행)'},
   bank:{title:'통장거래', crumb:'입출금 내역 관리'},
   match:{title:'입금매칭', crumb:'미수금 ↔ 입금내역 대사'},
-  savings:{title:'적금관리', crumb:'적금 계좌 · 납입 현황'},
+  savings:{title:'예적금관리', crumb:'예금 · 적금 계좌 · 납입 현황'},
   settings:{title:'설정 / 백업', crumb:'회사정보 · 데이터 관리'},
   hr:{title:'인사관리', crumb:'임직원 정보 · 직급 · 재직현황'},
   auth:{title:'권한관리', crumb:'메뉴별 접근 권한 · 직급별 설정'},
@@ -2815,64 +2815,128 @@ const Match = {
    6) 적금관리
 ===================================================== */
 Views.savings = function(){
-  const cards = State.savings.map(s=>{
-    const paidTotal = (s.payments||[]).reduce((x,p)=>x+(Number(p.amount)||0),0);
-    const payRows = (s.payments||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map((p,i)=>`
+  const savList = (State.savings||[]).filter(s=>(s.type||'적금')==='적금');
+  const depList = (State.savings||[]).filter(s=>s.type==='예금');
+
+  const savTotal = savList.reduce((s,x)=>(x.payments||[]).reduce((a,p)=>a+(Number(p.amount)||0),s),0);
+  const depTotal = depList.reduce((s,x)=>s+(Number(x.principal)||0),0);
+  const depInterest = depList.reduce((s,x)=>s+(Number(x.interest)||0),0);
+
+  const savCards = savList.map(s=>{
+    const paidTotal=(s.payments||[]).reduce((x,p)=>x+(Number(p.amount)||0),0);
+    const payRows=(s.payments||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map((p,i)=>`
       <tr><td class="ctr">${esc(p.date)}</td><td class="num">${fmt.num(p.amount)}</td>
       <td class="ctr"><button class="btn sm dgr" onclick="Savings.delPay('${s.id}',${(s.payments||[]).indexOf(p)})">삭제</button></td></tr>`).join('')
       || '<tr><td colspan="3"><div class="empty">납입 내역 없음</div></td></tr>';
-    return `
-    <div class="card">
+    return `<div class="card">
       <div class="hd">
         <h2>${esc(s.name)} <span class="tag t2">${esc(s.bankName)}</span></h2>
         <span style="font-size:12.5px;color:var(--ink2)">월 ${fmt.num(s.monthly)}원 · ${esc(s.start||'?')} ~ ${esc(s.maturity||'?')}</span>
         <span class="sp"></span>
         <span style="font-size:13px">누적납입 <b>${fmt.num(paidTotal)}</b>원 (${(s.payments||[]).length}회)</span>
         <button class="btn sm pri" onclick="Savings.addPay('${s.id}')">+ 납입 기록</button>
-        <button class="btn sm" onclick="Savings.edit('${s.id}')">수정</button>
+        <button class="btn sm" onclick="Savings.edit('${s.id}','적금')">수정</button>
         <button class="btn sm dgr" onclick="Savings.del('${s.id}')">삭제</button>
       </div>
       <div class="bd np" style="max-height:220px;overflow:auto">
         <table class="grid"><thead><tr><th class="ctr">납입일</th><th class="num">금액</th><th class="ctr">관리</th></tr></thead><tbody>${payRows}</tbody></table>
       </div>
     </div>`;
-  }).join('') || `<div class="card"><div class="empty"><b>등록된 적금이 없습니다</b>[적금 등록] 버튼으로 추가하세요</div></div>`;
+  }).join('') || `<div class="card"><div class="empty"><b>등록된 적금이 없습니다</b>[+ 적금 등록] 버튼으로 추가하세요</div></div>`;
 
+  const depCards = depList.map(s=>{
+    const matDate = s.maturity ? new Date(s.maturity) : null;
+    const today = new Date();
+    const dday = matDate ? Math.ceil((matDate-today)/(1000*60*60*24)) : null;
+    const ddayTag = dday===null ? '' : dday<0
+      ? `<span class="tag" style="background:#ffebee;color:#c62828">만기 ${Math.abs(dday)}일 경과</span>`
+      : dday===0 ? `<span class="tag t1">오늘 만기</span>`
+      : `<span class="tag t4">만기 D-${dday}</span>`;
+    return `<div class="card">
+      <div class="hd">
+        <h2>${esc(s.name)} <span class="tag t2">${esc(s.bankName)}</span> ${ddayTag}</h2>
+        <span style="font-size:12.5px;color:var(--ink2)">${esc(s.start||'?')} ~ ${esc(s.maturity||'?')} · 금리 ${s.rate||'-'}%</span>
+        <span class="sp"></span>
+        <span style="font-size:13px">원금 <b>${fmt.num(s.principal)}</b>원 · 이자(세후) <b style="color:var(--brand)">${fmt.num(s.interest)}</b>원</span>
+        <button class="btn sm" onclick="Savings.edit('${s.id}','예금')">수정</button>
+        <button class="btn sm dgr" onclick="Savings.del('${s.id}')">삭제</button>
+      </div>
+      <div class="bd" style="font-size:12.5px;color:var(--ink2)">${esc(s.memo||'')}</div>
+    </div>`;
+  }).join('') || `<div class="card"><div class="empty"><b>등록된 예금이 없습니다</b>[+ 예금 등록] 버튼으로 추가하세요</div></div>`;
+
+  if(typeof savingsTab==='undefined') window.savingsTab='savings';
   document.getElementById('content').innerHTML = `
-    <div class="toolbar"><span class="sp"></span><button class="btn pri" onclick="Savings.edit()">+ 적금 등록</button></div>
-    ${cards}`;
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(160px,1fr));gap:10px;margin-bottom:12px">
+      <div class="kpi a"><div class="lb">적금 누적납입 합계</div><div class="vl">${fmt.money(savTotal)}<small> 원</small></div></div>
+      <div class="kpi b"><div class="lb">예금 원금 합계</div><div class="vl">${fmt.money(depTotal)}<small> 원</small></div></div>
+      <div class="kpi e"><div class="lb">예금 이자(세후) 합계</div><div class="vl">${fmt.money(depInterest)}<small> 원</small></div></div>
+    </div>
+    <div class="toolbar sticky-toolbar">
+      <button class="btn ${savingsTab==='savings'?'pri':''}" onclick="savingsTab='savings';Views.savings()">💳 적금</button>
+      <button class="btn ${savingsTab==='deposit'?'pri':''}" onclick="savingsTab='deposit';Views.savings()">🏦 예금</button>
+      <span class="sp"></span>
+      ${savingsTab==='savings'
+        ? `<button class="btn pri" onclick="Savings.edit(null,'적금')">+ 적금 등록</button>`
+        : `<button class="btn pri" onclick="Savings.edit(null,'예금')">+ 예금 등록</button>`}
+    </div>
+    ${savingsTab==='savings' ? savCards : depCards}`;
 };
+
 
 const Savings = {
   byId(id){ return State.savings.find(s=>s.id===id); },
-  edit(id){
+  edit(id, type){
     const s = id ? this.byId(id) : null;
-    const body = `
+    const t = type || (s ? s.type||'적금' : '적금');
+    const isSav = t==='적금';
+    const body = isSav ? `
       <div class="frm">
-        <div class="fld w2"><label>적금명</label><input id="s-name" value="${esc(s?s.name:'')}"></div>
+        <div class="fld w2"><label>적금명 <span style="color:var(--red)">*</span></label><input id="s-name" value="${esc(s?s.name:'')}"></div>
         <div class="fld"><label>은행</label><input id="s-bank" value="${esc(s?s.bankName:'')}"></div>
-        <div class="fld"><label>월 납입액</label><input id="s-monthly" value="${s?fmt.num(s.monthly):''}" style="text-align:right"></div>
+        <div class="fld"><label>월 납입액(원)</label><input id="s-monthly" type="number" value="${s?s.monthly:''}" style="text-align:right"></div>
         <div class="fld"><label>시작일</label><input id="s-start" type="date" value="${esc(s?s.start:'')}"></div>
         <div class="fld"><label>만기일</label><input id="s-mat" type="date" value="${esc(s?s.maturity:'')}"></div>
         <div class="fld w2"><label>메모</label><input id="s-memo" value="${esc(s?s.memo||'':'')}"></div>
+      </div>` : `
+      <div class="frm">
+        <div class="fld w2"><label>예금명 <span style="color:var(--red)">*</span></label><input id="s-name" value="${esc(s?s.name:'')}"></div>
+        <div class="fld"><label>은행</label><input id="s-bank" value="${esc(s?s.bankName:'')}"></div>
+        <div class="fld"><label>원금(원)</label><input id="s-principal" type="number" value="${s?s.principal||'':''}" style="text-align:right"></div>
+        <div class="fld"><label>금리(%)</label><input id="s-rate" type="number" step="0.01" value="${s?s.rate||'':''}" style="text-align:right" placeholder="예: 3.5"></div>
+        <div class="fld"><label>이자(세후, 원)</label><input id="s-interest" type="number" value="${s?s.interest||'':''}" style="text-align:right"></div>
+        <div class="fld"><label>예치 시작일</label><input id="s-start" type="date" value="${esc(s?s.start:'')}"></div>
+        <div class="fld"><label>만기일</label><input id="s-mat" type="date" value="${esc(s?s.maturity:'')}"></div>
+        <div class="fld w2"><label>메모</label><input id="s-memo" value="${esc(s?s.memo||'':'')}"></div>
       </div>`;
-    UI.openModal(s?'적금 수정':'적금 등록', body, [
+    UI.openModal(s ? (t+' 수정') : (t+' 등록'), body, [
       {label:'취소', onClick:UI.closeModal},
-      {label:'저장', cls:'pri', onClick:()=>Savings.save(id)}
+      {label:'저장', cls:'pri', onClick:()=>Savings.save(id, t)}
     ]);
   },
-  save(id){
+  save(id, type){
     const g = x=>document.getElementById(x);
     const name = g('s-name').value.trim();
-    if(!name){ toast('적금명을 입력하세요'); return; }
-    const data = { name, bankName:g('s-bank').value.trim(), monthly:fmt.parseNum(g('s-monthly').value),
-                   start:g('s-start').value, maturity:g('s-mat').value, memo:g('s-memo').value.trim() };
+    if(!name){ toast((type||'항목')+'명을 입력하세요'); return; }
+    const isSav = (type||'적금')==='적금';
+    const data = isSav
+      ? { type:'적금', name, bankName:g('s-bank').value.trim(),
+          monthly:Number(g('s-monthly').value)||0,
+          start:g('s-start').value, maturity:g('s-mat').value,
+          memo:g('s-memo').value.trim() }
+      : { type:'예금', name, bankName:g('s-bank').value.trim(),
+          principal:Number(g('s-principal').value)||0,
+          rate:Number(g('s-rate').value)||0,
+          interest:Number(g('s-interest').value)||0,
+          start:g('s-start').value, maturity:g('s-mat').value,
+          memo:g('s-memo').value.trim() };
     if(id){ Object.assign(this.byId(id), data); }
-    else { data.id = DB.uid(); data.payments = []; State.savings.push(data); }
+    else { data.id=DB.uid(); if(isSav) data.payments=[]; State.savings.push(data); }
     State.saveAll(); UI.closeModal(); Views.savings(); toast('저장되었습니다');
   },
   del(id){
-    if(!confirm('적금과 납입 내역이 모두 삭제됩니다. 진행할까요?')) return;
+    const s = this.byId(id);
+    if(!confirm((s?s.type||'항목':'항목')+'과 관련 내역이 모두 삭제됩니다. 진행할까요?')) return;
     State.savings = State.savings.filter(s=>s.id!==id);
     State.saveAll(); Views.savings(); toast('삭제되었습니다');
   },
@@ -2881,13 +2945,13 @@ const Savings = {
     const body = `
       <div class="frm">
         <div class="fld"><label>납입일</label><input id="p-date" type="date" value="${todayStr()}"></div>
-        <div class="fld"><label>금액</label><input id="p-amt" value="${fmt.num(s.monthly)}" style="text-align:right"></div>
+        <div class="fld"><label>금액</label><input id="p-amt" type="number" value="${s.monthly||''}" style="text-align:right"></div>
       </div>`;
     UI.openModal('납입 기록 — '+s.name, body, [
       {label:'취소', onClick:UI.closeModal},
       {label:'기록', cls:'pri', onClick:()=>{
         const date = document.getElementById('p-date').value;
-        const amount = fmt.parseNum(document.getElementById('p-amt').value);
+        const amount = Number(document.getElementById('p-amt').value)||0;
         if(!date || !amount){ toast('납입일과 금액을 입력하세요'); return; }
         (s.payments = s.payments||[]).push({date, amount});
         State.saveAll(); UI.closeModal(); Views.savings(); toast('납입이 기록되었습니다');
@@ -2900,6 +2964,7 @@ const Savings = {
     State.saveAll(); Views.savings();
   }
 };
+
 
 /* =====================================================
    7) 설정 / 백업
@@ -3983,7 +4048,7 @@ const AUTH_MENUS = [
   { key:'invoices',   label:'세금계산서' },
   { key:'bank',       label:'통장거래' },
   { key:'match',      label:'입금매칭' },
-  { key:'savings',    label:'적금관리' },
+  { key:'savings',    label:'예적금관리' },
   { key:'dash',       label:'대시보드(M)' },
   { key:'dashg',      label:'대시보드(G)' },
   { key:'hr',         label:'인사관리' },
