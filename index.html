@@ -200,7 +200,7 @@ table.dz td.num-ro{padding:6px 9px;text-align:right;font-variant-numeric:tabular
     <div class="grp" style="padding-left:24px;font-size:10.5px;letter-spacing:.5px">CF</div>
     <a href="#bank" data-v="bank" style="padding-left:24px"><span class="ic">🏦</span>통장거래</a>
     <a href="#match" data-v="match" style="padding-left:24px"><span class="ic">⇄</span>입금매칭</a>
-    <a href="#savings" data-v="savings" style="padding-left:24px"><span class="ic">💰</span>적금관리</a>
+    <a href="#savings" data-v="savings" style="padding-left:24px"><span class="ic">💰</span>예적금관리</a>
     <div class="grp">시스템</div>
     <a href="#settings" data-v="settings"><span class="ic">⚙</span>설정 / 백업</a>
   </nav>
@@ -3262,8 +3262,8 @@ const _conv={
   invFrom:function(r){return{id:r.id,contractId:r.contract_id,kind:r.kind,issueDate:_toDateOnly(r.issue_date),supply:Number(r.supply||0),vat:Number(r.vat||0),paid:r.paid,paidDate:_toDateOnly(r.paid_date),memo:r.memo};},
   bankTo:function(b){return{id:b.id,date:b.date,bank_desc:b.desc||'',deposit:b.deposit||0,withdraw:b.withdraw||0,balance:b.balance||0,bank_name:b.bankName||'',memo:b.memo||null,match_invoice_id:b.matchInvoiceId||null};},
   bankFrom:function(r){return{id:r.id,date:r.date,desc:r.bank_desc,deposit:Number(r.deposit||0),withdraw:Number(r.withdraw||0),balance:Number(r.balance||0),bankName:r.bank_name,memo:r.memo,matchInvoiceId:r.match_invoice_id};},
-  savTo:function(s){return{id:s.id,name:s.name,bank_name:s.bankName||'',monthly:s.monthly||0,start_date:s.startDate||null,maturity:s.maturity||null,payments:s.payments||[],memo:s.memo||null};},
-  savFrom:function(r){return{id:r.id,name:r.name,bankName:r.bank_name,monthly:Number(r.monthly||0),startDate:r.start_date,maturity:r.maturity,payments:r.payments||[],memo:r.memo};},
+  savTo:function(s){return{id:s.id,name:s.name,bank_name:s.bankName||'',monthly:s.monthly||0,start_date:s.start||s.startDate||null,maturity:s.maturity||null,payments:s.payments||[],memo:s.memo||null,type:s.type||'적금',principal:s.principal||0,rate:s.rate||0,interest:s.interest||0};},
+  savFrom:function(r){return{id:r.id,name:r.name,bankName:r.bank_name,monthly:Number(r.monthly||0),start:r.start_date,startDate:r.start_date,maturity:r.maturity,payments:r.payments||[],memo:r.memo,type:r.type||'적금',principal:Number(r.principal||0),rate:Number(r.rate||0),interest:Number(r.interest||0)};},
   hrTo:function(h){return{id:h.id,name:h.name,dept:h.dept||null,position:h.position||null,rank:h.rank||null,join_date:h.joinDate||null,status:h.status||'재직',birth:h.birth||null,email:h.email||null,phone:h.phone||null,memo:h.memo||null};},
   hrFrom:function(r){return{id:r.id,name:r.name,dept:r.dept,position:r.position,rank:r.rank,joinDate:r.join_date,status:r.status||'재직',birth:r.birth,email:r.email,phone:r.phone,memo:r.memo};},
   ediagTo:function(d){return{id:d.id,contract_id:d.contractId,leader:d.leader||null,members:d.members||[],start_date:d.startDate||null,end_date:d.endDate||null,memo:d.memo||null,member_schedules:d.memberSchedules||{},files:d.files||{}};},
